@@ -4,68 +4,12 @@
 
 タスク管理自動化構想（JIRA2プロジェクト＋個人タスクをMattermost/メール/Zoomから
 自動収集し、JIRA自動起票・完了候補提示まで行う）のうち、「スキーマとダッシュボード
-UIのパイロット実装」に相当するリポジトリ。2026-09-12に`/work`（メインリポジトリ）の
-`docker/task-dashboard/`からこの独立リポジトリへ切り出された。
+UIのパイロット実装」に相当するリポジトリ。**外部通信は一切行わない。**
+Mattermost/メール/Zoom/JIRA/Claude APIいずれにも接続せず、JIRA連携相当の操作は
+すべて`stubJiraTransition()`によるログ出力のみ。
 
-**外部通信は一切行わない。** Mattermost/メール/Zoom/JIRA/Claude APIいずれにも
-接続せず、JIRA連携相当の操作はすべて`stubJiraTransition()`によるログ出力のみ。
-
-全体構想（本パイロットが将来どう拡張される想定か）は本リポジトリ内の
-`docs/adr/proposals/task-management-automation.md`を参照（2026-09-12、ADR自体も
-`/work`からこのリポジトリへ移動済み）。
-
-**2026-09-12、Python/Flask実装からGo + sqlc + htmxへ全面移行した。** 「軽量さ」と
-「SQLがロジックから分離されたわかりやすさ」を重視した選択（経緯は`docs/work-log.md`参照）。
-以下はGo版の構成。詳細は`docs/design.md`を参照。
-
-## ディレクトリ構成
-
-```
-build/Dockerfile               # マルチステージ(golang:1.25-alpine builder → distroless/static-debian12)
-compose/docker-compose.yml
-go.mod / go.sum
-main.go                        # エントリポイント(DB初期化・マイグレーション・自動シード・サーバー起動)
-internal/taskstore/            # データ層(SQLとロジックの分離を最重視)
-  schema.sql                    # スキーマ定義(go:embed、起動時DDLにも使う)
-  query.sql                     # sqlc用の名前付きクエリ
-  sqlc.yaml
-  db.go / models.go / query.sql.go  # sqlc生成コード(コミット済み・手編集しない)
-  store.go                      # DB接続・起動時マイグレーション
-  seed.go                       # サンプルデータ投入(再実行可能・全件作り直し)
-internal/web/                  # HTTPハンドラ・業務ロジック
-  handlers.go / kanban.go / render.go
-  templates/board.html.tmpl     # 唯一のテンプレート(html/template、go:embed)
-static/htmx.min.js             # htmx本体(vendor同梱、CDN不使用)
-docs/design.md                 # 詳細設計書（データモデル・画面仕様・ルート一覧を網羅）
-```
-
-## 技術スタック・依存関係
-
-- Go標準ライブラリの`net/http`（Go 1.22+の`ServeMux`）+ `html/template`。追加の
-  ルーターフレームワークは使わない。
-- SQL: [sqlc](https://sqlc.dev/)で`internal/taskstore/query.sql`から型安全なGoコードを
-  生成する。SQLは`.sql`ファイル、ロジックはGoファイル、という分離を最重視している。
-- DBドライバ: `modernc.org/sqlite`（cgo不要）。`CGO_ENABLED=0`でビルドでき、実行イメージを
-  `distroless/static-debian12`にできる（最終イメージ30MB台）。
-- フロントエンド: htmx（vendor同梱）+ Tailwind CSS（CDN読み込み、変更なし）。JSは
-  ドラッグ&ドロップ・モーダル開閉のみ素のDOM操作。
-- **この環境にGo/sqlcがローカルインストールされていない場合、`docker run`経由で
-  ビルド・コード生成を行う**（ホストへのインストールは行わない方針）。コマンド例は
-  `docs/design.md`の「開発時のビルド方法」を参照。
-
-## 実行方法
-
-- ローカルビルド（Docker経由）:
-  `docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$(pwd):/src" -w /src golang:1.25-alpine go build -o /src/.build/task-dashboard .`
-  - `--user`を付けないと生成物がroot所有になるので必ず付けること。
-  - 実行時は環境変数`TASK_DASHBOARD_HOST`（既定127.0.0.1）/`TASK_DASHBOARD_PORT`
-    （既定5000）/`TASK_DASHBOARD_DB_PATH`/`TASK_DASHBOARD_AUTO_SEED`
-    （`1`でDBが空の時のみ自動シード）で上書き可能。
-- sqlcによるクエリ再生成（`query.sql`変更時）:
-  `docker run --rm --user "$(id -u):$(id -g)" -v "$(pwd)/internal/taskstore:/src" -w /src sqlc/sqlc generate`
-- Docker実行: `docker compose -f compose/docker-compose.yml up -d --build`
-  - ポート8090、実データ(SQLite)は`/docker/task-dashboard/data`
-    （このリポジトリの外・gitの管理対象外）にボリュームマウントされる。
+プロジェクト概要・技術スタック・ディレクトリ構成・実行方法は`README.md`を参照。
+詳細な業務仕様・データモデル・画面仕様は`docs/design.md`を参照。
 
 ## 誤解しやすい業務ルール（詳細は`docs/design.md`参照）
 
@@ -88,6 +32,8 @@ docs/design.md                 # 詳細設計書（データモデル・画面�
 
 ## 関連ドキュメント
 
+- `README.md`（本リポジトリ内） — プロジェクト概要・技術スタック・ディレクトリ構成・
+  実行方法。
 - `docs/design.md`（本リポジトリ内） — データモデル・画面仕様・ルート一覧・
   デプロイ構成・既知の制限を網羅した詳細設計書。実装を変更する際は必ず参照し、
   変更があれば追記すること。
