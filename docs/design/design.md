@@ -8,7 +8,9 @@
 （`docs/adr/proposals/task-management-automation.md`、後述の「関連ドキュメント」参照）。
 本サービスはそのうち「スキーマとダッシュボードUIのパイロット実装」に相当し、**外部通信は
 一切行わない**（Mattermost/メール/Zoom/JIRA/Claude APIいずれにも接続しない。JIRA連携相当の
-操作はすべてログ出力のみのスタブ）。
+操作はすべてログ出力のみのスタブ）。まだ実装していない`collector`/`extractor`/`syncer`/
+`registrar`/`digest`部分の確定設計は`docs/design/task-management-automation.md`にまとめている
+（本書はダッシュボードUI側のみを扱い、重複させない）。
 
 **2026-09-12、Python/Flask実装からGo + sqlc + htmxへ全面移行した。** 「軽量さ」（単一バイナリ
 配布・依存の少なさ）と「ソースコードのわかりやすさ」（特にSQLがロジックから分離されている
@@ -232,6 +234,9 @@ docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$(pwd):/src" -w /src
 
 ## 関連ドキュメント
 
-- `docs/adr/proposals/task-management-automation.md`（このリポジトリ内） — 全体構想のADR
-  （データモデル・パイプライン全体像）
+- `docs/adr/proposals/task-management-automation.md`（このリポジトリ内、索引） — 全体構想の
+  ADR。意思決定の経緯（案の比較・採用理由）を論点ごとのファイルに分割して記録している。
+- `docs/design/task-management-automation.md`（このリポジトリ内） — 全体構想のうち、
+  まだ実装していない`collector`/`extractor`/`syncer`/`registrar`/`digest`部分の確定設計
+  （データモデルER図・パイプライン全体像）。
 - `docs/work-log.md` — Go+sqlc+htmxへの移行の経緯・判断理由

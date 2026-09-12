@@ -37,9 +37,13 @@ Mattermost/メール/Zoom/JIRA/Claude APIいずれにも接続せず、JIRA連�
 - `docs/design/design.md`（本リポジトリ内） — データモデル・画面仕様・ルート一覧・
   デプロイ構成・既知の制限を網羅した詳細設計書。実装を変更する際は必ず参照し、
   変更があれば追記すること。
-- `docs/adr/proposals/task-management-automation.md`（本リポジトリ内） — 全体構想のADR
-  （データモデル・パイプライン全体像。まだ未実装のcollector/extractor/syncer/registrar
-  含む）。
+- `docs/adr/proposals/task-management-automation.md`（本リポジトリ内、索引） — 全体構想の
+  ADR。意思決定の経緯（案の比較・採用理由）を論点ごとのファイルに分割して記録している。
+- `docs/design/task-management-automation.md`（本リポジトリ内） — 全体構想のうち、まだ
+  未実装のcollector/extractor/syncer/registrar/digestを含む確定設計（データモデル・
+  パイプライン全体像）。
+- `docs/adr/README.md`（本リポジトリ内） — ADRとdocs/design/の役割分担・ファイル構成の
+  運用ルール。
 - `docs/session-context.md` / `docs/task-queue.md` / `docs/work-log.md`（本リポジトリ内） —
   進捗管理・作業経緯の記録。2026-09-12より、タスク管理は`/work`側ではなくこのリポジトリ
   単体で行う運用に変更した（詳細は次の「セッションコンテキスト・タスクキュー・ワークログ」章）。

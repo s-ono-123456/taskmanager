@@ -1,0 +1,25 @@
+# 論点: 個人タスクの格納先（task-management-automation--a-personal-task-store）
+
+- 起票: 2026-09-12 / 親タスク: `task-management-automation`（docs/adr/proposals/task-management-automation.md 参照）
+- 論点: JIRAはプロジェクトごとに別管理（2プロジェクト）だが、Mattermost/メールで依頼される
+  個人タスクには専用の管理先が無く漏れやすい。個人タスクをどこに格納するかを決める。
+- 状態: **採用済み（A2、2026-09-12）**
+
+## 方針案
+
+| 案 | 内容 | コスト | リスク | 状態 |
+|---|---|---|---|---|
+| A1 | JIRAに個人用の第3プロジェクトを作り、JIRA1箇所に集約 | 低（既存API流用） | 個人用途にはJIRAの項目が過剰で入力が重い | 不採用 |
+| A2 | 軽量な自前ストア（例: このリポジトリのtask-queue.mdに近いMarkdown、またはSQLite+簡易UI）を新設 | 中（UI/ストアを新規構築） | JIRAと別の場所を見る手間が増える | **採用**（2026-09-12） |
+
+## 採用理由 / 検討経緯
+
+個人タスクにJIRAの項目（担当者・優先度・カスタムフィールド等）は過剰であり、入力の重さが
+利用の妨げになると判断してA2を採用した。自前ストアの具体的な実体は`tasks`テーブル
+（`jira_key`がNULLの行）として実現している。
+
+## 関連する設計ドキュメント
+
+- `docs/design/task-management-automation.md`（データモデル ER図・`tasks`テーブルの`jira_key`
+  の扱い）
+- `docs/design/design.md`（個人タスクを含むダッシュボードUIのパイロット実装）

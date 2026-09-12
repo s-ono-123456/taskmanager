@@ -1,0 +1,23 @@
+# 論点: 会議・メール本文の外部LLM API送信可否（task-management-automation--g-data-handling-policy）
+
+- 起票: 2026-09-12 / 親タスク: `task-management-automation`（docs/adr/proposals/task-management-automation.md 参照）
+- 論点: 抽出・分類処理で会議内容・メール本文を外部LLM API（Claude API等）に送信してよいか
+  という情報取り扱いポリシー。起票時点では未確認事項だった。
+- 状態: **決定済み（2026-09-12）**
+
+## 方針案
+
+| 案 | 内容 | リスク | 状態 |
+|---|---|---|---|
+| G1 | 外部LLM API（Anthropic Claude API等）への送信を許可する | 会議内容・メール本文が外部サービスへ送信される | **採用**（2026-09-12、ユーザー確認: 問題なし） |
+| G2 | 外部LLM APIへは送信せず、ローカルで完結する手段（ルールベース抽出、ローカルLLM等）に限定する | 抽出精度・実装コストで不利になる可能性が高い | 不採用（検討していない） |
+
+## 採用理由 / 検討経緯
+
+2026-09-12にユーザーへ確認し、会議内容・メール本文を外部LLM API（Claude API等）に送信する
+ことは問題ないとの回答を得た。これにより、抽出・分類処理でClaude APIを利用する前提の設計
+（論点B以降、`docs/design/task-management-automation.md`の「抽出・分類」節）が成立している。
+
+## 関連する設計ドキュメント
+
+- `docs/design/task-management-automation.md`（抽出・分類: Claude APIへ本文を渡す仕様）
