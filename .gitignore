@@ -3,3 +3,9 @@
 
 # Goのローカルビルド成果物(docker run経由でビルドする際の出力先)
 /.build/
+
+# sqlc生成コード(internal/taskstore/query.sqlから生成。コミットせず、ビルド時に
+# `sqlc generate`で都度生成する。開発時の生成方法はREADME.md参照)
+/internal/taskstore/db.go
+/internal/taskstore/models.go
+/internal/taskstore/query.sql.go

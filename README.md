@@ -36,7 +36,7 @@ internal/taskstore/            # データ層(SQLとロジックの分離を最�
   schema.sql                    # スキーマ定義(go:embed、起動時DDLにも使う)
   query.sql                     # sqlc用の名前付きクエリ
   sqlc.yaml
-  db.go / models.go / query.sql.go  # sqlc生成コード(コミット済み・手編集しない)
+  db.go / models.go / query.sql.go  # sqlc生成コード(コミットしない。ビルド時に生成)
   store.go                      # DB接続・起動時マイグレーション
   seed.go                       # サンプルデータ投入(再実行可能・全件作り直し)
 internal/web/                  # HTTPハンドラ・業務ロジック
@@ -48,8 +48,16 @@ docs/design.md                 # 詳細設計書（データモデル・画面�
 
 ## 実行方法
 
-- ローカルビルド（Docker経由。この環境にGo/sqlcがローカルインストールされていない場合、
-  `docker run`経由でビルド・コード生成を行う方針）:
+**`internal/taskstore/db.go`/`models.go`/`query.sql.go`はsqlc生成コードでコミットしない
+（`.gitignore`対象）。ビルド前に必ず`sqlc generate`を実行すること。**
+
+- sqlcによるコード生成（この環境にGo/sqlcがローカルインストールされていない場合、
+  `docker run`経由で行う方針）:
+  ```bash
+  docker run --rm --user "$(id -u):$(id -g)" -v "$(pwd)/internal/taskstore:/src" -w /src \
+    sqlc/sqlc generate
+  ```
+- ローカルビルド（同じくDocker経由）:
   ```bash
   docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$(pwd):/src" -w /src \
     golang:1.25-alpine go build -o /src/.build/task-dashboard .
@@ -58,12 +66,9 @@ docs/design.md                 # 詳細設計書（データモデル・画面�
   - 実行時は環境変数`TASK_DASHBOARD_HOST`（既定127.0.0.1）/`TASK_DASHBOARD_PORT`
     （既定5000）/`TASK_DASHBOARD_DB_PATH`/`TASK_DASHBOARD_AUTO_SEED`
     （`1`でDBが空の時のみ自動シード）で上書き可能。
-- sqlcによるクエリ再生成（`query.sql`変更時）:
-  ```bash
-  docker run --rm --user "$(id -u):$(id -g)" -v "$(pwd)/internal/taskstore:/src" -w /src \
-    sqlc/sqlc generate
-  ```
 - Docker実行: `docker compose -f compose/docker-compose.yml up -d --build`
+  - `build/Dockerfile`内で`sqlc generate`を自動実行してからビルドするため、事前の
+    手動生成は不要。
   - ポート8090、実データ(SQLite)は`/docker/task-dashboard/data`
     （このリポジトリの外・gitの管理対象外）にボリュームマウントされる。
 

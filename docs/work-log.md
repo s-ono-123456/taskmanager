@@ -5,6 +5,53 @@
 
 ---
 
+## 2026-09-12 / sqlc生成コードをコミット・ローカル保存しない方式へ変更
+
+### やったこと
+
+- 前セッションでGo+sqlc+htmxへ移行した際、sqlc生成コード（`internal/taskstore/db.go`/
+  `models.go`/`query.sql.go`）はコミットする方針としていたが、ユーザーから
+  「ビルド時生成にしてソースコード自体を管理しないようにできるか」と問われ、
+  実現方法とトレードオフ（Go単体ビルドができなくなる／レビューで生成結果が見えなくなる、
+  という代償と、リポジトリの純粋なソース量が減るという利点）を説明したうえで、
+  ユーザーが変更を選択した。
+- 対応内容:
+  - `.gitignore`に生成物3ファイルを追加し、`git rm --cached`で追跡から除外。
+  - ユーザーからの追加指示「コミットしないではなく、ローカルにもファイルとして
+    残さないでください」を受け、生成物をローカルからも削除した。
+  - `build/Dockerfile`に`sqlc-gen`ステージを追加し、`golang`ビルドステージへ
+    生成済み`.go`ファイルをCOPYする形にした。
+  - `README.md`・`docs/design.md`の該当記述（ディレクトリ構成の説明・開発時の
+    ビルド手順）を「コミット済み」から「コミットしない・ビルド時生成」に更新し、
+    手順の順序（sqlc generateが先、goビルドが後）も明記した。
+- 動作確認: ローカルで`sqlc generate`→`go build`の順で通ることを確認した後、
+  生成物を再度削除し、`docker build`単体（`build/Dockerfile`のsqlc-genステージ込み）
+  でクリーンな状態からビルド・起動・HTTPアクセスまで通ることを確認した。
+  イメージサイズは変更前と同じ34.5MB。
+
+### 発生した問題と解決
+
+- **`sqlc/sqlc`公式イメージにはシェルが無い**: Dockerfileで`RUN sqlc generate`
+  （shell形式、内部的に`/bin/sh -c`を使う）と書いたところ
+  `stat /bin/sh: no such file or directory`で失敗した。exec形式`RUN ["sqlc", "generate"]`
+  に変更しても今度は`executable file not found in $PATH`で失敗。
+  `docker inspect sqlc/sqlc --format '{{json .Config.Entrypoint}}'`で確認すると
+  ENTRYPOINTが`/workspace/sqlc`という絶対パスだったため、`RUN`命令はENTRYPOINTを
+  引き継がないことを踏まえ`RUN ["/workspace/sqlc", "generate"]`とフルパス指定して解決。
+
+### 学んだこと・今後の参考
+
+- **distroless/シェル無しベースの公式イメージをDockerfileの`RUN`で使う場合、
+  shell形式は使えず、exec形式でもコマンド名だけでは`$PATH`解決に失敗することがある。**
+  `docker inspect --format '{{json .Config.Entrypoint}}'`でそのイメージの実行ファイルの
+  絶対パスを確認し、`RUN ["/絶対パス/コマンド", "引数"]`の形で呼び出すのが確実。
+- 生成コードをコミットするかどうかは「Go単体でビルドできる利便性」と
+  「リポジトリの純粋性・生成物の差分をコミット履歴に残さない」のトレードオフであり、
+  唯一の正解はない。今回はユーザーの「軽量さ・わかりやすさ」重視の意向に沿って
+  後者を選んだ。
+
+---
+
 ## 2026-09-12 / README.md新規作成とCLAUDE.mdの重複内容整理
 
 ### やったこと
