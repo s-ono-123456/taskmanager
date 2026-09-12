@@ -1,6 +1,5 @@
 # ローカル実行時のSQLite DB(Docker運用時の実データは /docker/task-dashboard/data 側)
 *.db
 
-# Pythonキャッシュ
-__pycache__/
-*.pyc
+# Goのローカルビルド成果物(docker run経由でビルドする際の出力先)
+/.build/

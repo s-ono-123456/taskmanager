@@ -1,18 +1,8 @@
-#!/usr/bin/env python3
-"""タスク管理自動化パイロットのDBスキーマ・接続ヘルパー。
+-- タスク管理自動化パイロットのDBスキーマ。
+-- docs/adr/proposals/task-management-automation.md のデータモデルに対応するSQLiteスキーマ。
+-- go:embed でそのまま読み込み、起動時のCREATE TABLE IF NOT EXISTS実行にも使う
+-- (sqlcの型推論と起動時DDLの単一のソース)。
 
-docs/adr/proposals/task-management-automation.md のデータモデルに対応するSQLiteスキーマ。
-標準ライブラリのみ使用。外部通信は一切行わない。
-"""
-import os
-import sqlite3
-
-DB_PATH = os.environ.get(
-    "TASK_DASHBOARD_DB_PATH",
-    os.path.join(os.path.dirname(__file__), "task_dashboard.db"),
-)
-
-SCHEMA = """
 CREATE TABLE IF NOT EXISTS messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     source TEXT NOT NULL,                  -- mattermost / email / zoom
@@ -45,7 +35,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     title TEXT NOT NULL,
     description TEXT,
     target TEXT NOT NULL,                  -- jira_a / jira_b / personal
-    status TEXT NOT NULL DEFAULT 'todo',   -- todo / in_progress / done
+    status TEXT NOT NULL DEFAULT 'todo',   -- todo / in_progress / reviewing / done
     jira_key TEXT,                         -- NULLなら個人タスク
     created_at TEXT NOT NULL,
     closed_at TEXT,
@@ -61,32 +51,3 @@ CREATE TABLE IF NOT EXISTS user_map (
     display_name TEXT,
     PRIMARY KEY (source, source_user_id)
 );
-"""
-
-
-def get_connection():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
-    return conn
-
-
-def init_db():
-    conn = get_connection()
-    try:
-        conn.executescript(SCHEMA)
-        # 旧スキーマ(status='open'/'done'の2値)からのマイグレーション。
-        # カンバン化(todo/in_progress/done の3値)に合わせて既存データを寄せる。
-        conn.execute("UPDATE tasks SET status = 'todo' WHERE status = 'open'")
-        # 既存DB(due_date列がまだ無いもの)へのマイグレーション。
-        columns = [row["name"] for row in conn.execute("PRAGMA table_info(tasks)")]
-        if "due_date" not in columns:
-            conn.execute("ALTER TABLE tasks ADD COLUMN due_date TEXT")
-        conn.commit()
-    finally:
-        conn.close()
-
-
-if __name__ == "__main__":
-    init_db()
-    print(f"スキーマを初期化しました: {DB_PATH}")

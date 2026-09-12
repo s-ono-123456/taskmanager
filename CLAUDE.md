@@ -8,40 +8,61 @@ UIのパイロット実装」に相当するリポジトリ。2026-09-12に`/wor
 `docker/task-dashboard/`からこの独立リポジトリへ切り出された。
 
 **外部通信は一切行わない。** Mattermost/メール/Zoom/JIRA/Claude APIいずれにも
-接続せず、JIRA連携相当の操作はすべて`stub_jira_transition()`によるログ出力のみ。
+接続せず、JIRA連携相当の操作はすべて`stubJiraTransition()`によるログ出力のみ。
 
 全体構想（本パイロットが将来どう拡張される想定か）は本リポジトリ内の
 `docs/adr/proposals/task-management-automation.md`を参照（2026-09-12、ADR自体も
 `/work`からこのリポジトリへ移動済み）。
 
+**2026-09-12、Python/Flask実装からGo + sqlc + htmxへ全面移行した。** 「軽量さ」と
+「SQLがロジックから分離されたわかりやすさ」を重視した選択（経緯は`docs/work-log.md`参照）。
+以下はGo版の構成。詳細は`docs/design.md`を参照。
+
 ## ディレクトリ構成
 
 ```
-build/Dockerfile          # python:3.13-slim + flask、templates同梱
+build/Dockerfile               # マルチステージ(golang:1.25-alpine builder → distroless/static-debian12)
 compose/docker-compose.yml
-db.py                     # SQLiteスキーマ定義・接続ヘルパー
-seed.py                   # サンプルデータ投入（再実行可能・全件作り直し）
-app.py                    # Flaskアプリ本体（ルーティング・業務ロジック）
-templates/board.html      # 唯一のテンプレート（Kanbanボード＋モーダル2種）
-docs/design.md            # 詳細設計書（データモデル・画面仕様・ルート一覧を網羅）
+go.mod / go.sum
+main.go                        # エントリポイント(DB初期化・マイグレーション・自動シード・サーバー起動)
+internal/taskstore/            # データ層(SQLとロジックの分離を最重視)
+  schema.sql                    # スキーマ定義(go:embed、起動時DDLにも使う)
+  query.sql                     # sqlc用の名前付きクエリ
+  sqlc.yaml
+  db.go / models.go / query.sql.go  # sqlc生成コード(コミット済み・手編集しない)
+  store.go                      # DB接続・起動時マイグレーション
+  seed.go                       # サンプルデータ投入(再実行可能・全件作り直し)
+internal/web/                  # HTTPハンドラ・業務ロジック
+  handlers.go / kanban.go / render.go
+  templates/board.html.tmpl     # 唯一のテンプレート(html/template、go:embed)
+static/htmx.min.js             # htmx本体(vendor同梱、CDN不使用)
+docs/design.md                 # 詳細設計書（データモデル・画面仕様・ルート一覧を網羅）
 ```
 
 ## 技術スタック・依存関係
 
-- Python標準ライブラリ（`sqlite3`）+ Flask + Jinja2 + Tailwind CSS（CDN読み込み）。
-- JS側もフレームワークなし（素のDOM操作・HTML5 Drag and Drop API・`<dialog>`要素）。
-- 依存パッケージは`flask`のみ。`pyproject.toml`/`requirements.txt`は無く、
-  `build/Dockerfile`内で直接`pip install flask`している。
-- リポジトリ直下に`.venv`は未整備（`app.py`冒頭コメントに`uv run python app.py`と
-  あるが、uv管理ファイルは無いため、実行時は素の`python`/`pip`で構わない）。
+- Go標準ライブラリの`net/http`（Go 1.22+の`ServeMux`）+ `html/template`。追加の
+  ルーターフレームワークは使わない。
+- SQL: [sqlc](https://sqlc.dev/)で`internal/taskstore/query.sql`から型安全なGoコードを
+  生成する。SQLは`.sql`ファイル、ロジックはGoファイル、という分離を最重視している。
+- DBドライバ: `modernc.org/sqlite`（cgo不要）。`CGO_ENABLED=0`でビルドでき、実行イメージを
+  `distroless/static-debian12`にできる（最終イメージ30MB台）。
+- フロントエンド: htmx（vendor同梱）+ Tailwind CSS（CDN読み込み、変更なし）。JSは
+  ドラッグ&ドロップ・モーダル開閉のみ素のDOM操作。
+- **この環境にGo/sqlcがローカルインストールされていない場合、`docker run`経由で
+  ビルド・コード生成を行う**（ホストへのインストールは行わない方針）。コマンド例は
+  `docs/design.md`の「開発時のビルド方法」を参照。
 
 ## 実行方法
 
-- ローカル実行: `python app.py`
-  - 既定では`127.0.0.1`のみにバインド（外部公開しない前提）。
-  - 環境変数`TASK_DASHBOARD_HOST`/`TASK_DASHBOARD_PORT`/`TASK_DASHBOARD_DB_PATH`/
-    `TASK_DASHBOARD_AUTO_SEED`（`1`でDBが空の時のみ自動シード）で上書き可能。
-- サンプルデータ投入: `python seed.py`（再実行すると全件作り直し）。
+- ローカルビルド（Docker経由）:
+  `docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$(pwd):/src" -w /src golang:1.25-alpine go build -o /src/.build/task-dashboard .`
+  - `--user`を付けないと生成物がroot所有になるので必ず付けること。
+  - 実行時は環境変数`TASK_DASHBOARD_HOST`（既定127.0.0.1）/`TASK_DASHBOARD_PORT`
+    （既定5000）/`TASK_DASHBOARD_DB_PATH`/`TASK_DASHBOARD_AUTO_SEED`
+    （`1`でDBが空の時のみ自動シード）で上書き可能。
+- sqlcによるクエリ再生成（`query.sql`変更時）:
+  `docker run --rm --user "$(id -u):$(id -g)" -v "$(pwd)/internal/taskstore:/src" -w /src sqlc/sqlc generate`
 - Docker実行: `docker compose -f compose/docker-compose.yml up -d --build`
   - ポート8090、実データ(SQLite)は`/docker/task-dashboard/data`
     （このリポジトリの外・gitの管理対象外）にボリュームマウントされる。
@@ -49,15 +70,21 @@ docs/design.md            # 詳細設計書（データモデル・画面仕様�
 ## 誤解しやすい業務ルール（詳細は`docs/design.md`参照）
 
 - **完了レーンは直近7日以内に完了(`closed_at`)したタスクのみ表示**する
-  （`DONE_LANE_WINDOW_DAYS`）。7日を超えても データは残り続け、
+  （`DoneLaneWindowDays`）。7日を超えても データは残り続け、
   「非表示分も表示」をONにしても表示されない（削除ではなく表示上のフィルタ）。
 - **「非表示」＝`tracked`フラグの反転のみ。** 削除機能は存在しない。
   非表示にする際、対象が`done`でなければ同時に`status=done`・`closed_at`を
   設定する（＝一旦完了扱いにする）。
 - ドラッグ&ドロップのドロップ先レーン判定は**ポインタのx座標のみ**で行う
   （y座標・列の高さは考慮しない）。
-- JIRA連携（`target=jira_a`/`jira_b`）タスクの状態変化時は`stub_jira_transition()`
+- JIRA連携（`target=jira_a`/`jira_b`）タスクの状態変化時は`stubJiraTransition()`
   を呼ぶが、実際のHTTP通信は発生しない。
+- POST操作（編集/新規作成/移動/非表示切替）はhtmx化されており、成功・失敗いずれも
+  HTTP 200で「ボードフラグメント＋トースト」を返す。成功/失敗はレスポンスヘッダー
+  `X-Toast-Category`で判定している（htmxは4xx/5xxを自動スワップしないため）。
+- 編集・新規作成フォームがフィルタ状態（`target`/`show_untracked`）をhx-valsで送る際は
+  `filter_target`/`filter_show_untracked`という専用キー名を使う。フォーム自身の
+  `target`（タスクの対象）と名前が衝突するのを避けるため。
 
 ## 関連ドキュメント
 

@@ -1,0 +1,475 @@
+{{define "page"}}
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>タスク管理ダッシュボード（パイロット）</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="/static/htmx.min.js"></script>
+<style>
+  [draggable="true"] { cursor: grab; }
+  [draggable="true"]:active { cursor: grabbing; }
+  dialog::backdrop { background: rgba(15, 23, 42, 0.5); }
+</style>
+</head>
+<body class="bg-slate-50 text-slate-800 dark:bg-slate-900 dark:text-slate-100 min-h-screen">
+<div class="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
+
+  <h1 class="text-xl font-semibold tracking-tight mb-4">
+    タスク管理ダッシュボード
+    <span class="text-sm font-normal text-slate-400">（パイロット・外部通信なし）</span>
+  </h1>
+
+  <div class="flex flex-wrap items-center justify-between gap-3 mb-6 rounded-xl bg-white dark:bg-slate-800 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 px-4 py-3">
+    <form id="filter-state" method="get"
+          hx-get="/" hx-select="#board" hx-target="#board" hx-swap="outerHTML" hx-push-url="true" hx-trigger="change"
+          class="flex flex-wrap items-center gap-3 text-sm">
+      <label class="flex items-center gap-1.5">
+        対象:
+        <select name="target"
+                class="rounded-md border-slate-300 dark:border-slate-600 dark:bg-slate-700 text-sm py-1 pl-2 pr-7 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+          <option value="">(すべて)</option>
+          {{range .Targets}}
+            <option value="{{.}}" {{if eq . $.SelectedTarget}}selected{{end}}>{{.}}</option>
+          {{end}}
+        </select>
+      </label>
+      <label class="flex items-center gap-1.5">
+        <input type="checkbox" name="show_untracked" value="1" {{if .ShowUntracked}}checked{{end}}
+               class="rounded border-slate-300 text-blue-600 focus:ring-blue-500">
+        非表示分も表示
+      </label>
+    </form>
+    <button type="button" id="new-task-btn"
+       class="rounded-md bg-blue-600 text-white px-3 py-1.5 text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm">
+      + 新規タスク
+    </button>
+  </div>
+
+  {{template "board" .}}
+</div>
+
+<dialog id="edit-modal" class="rounded-xl shadow-lg p-0 w-full max-w-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 backdrop:backdrop-blur-sm">
+  <form method="post" id="edit-form" hx-target="#board" hx-swap="outerHTML"
+        hx-vals="js:{...filterStateVals()}"
+        class="p-5 space-y-4">
+    <div class="flex items-start justify-between gap-2">
+      <h2 class="text-lg font-semibold">タスク詳細</h2>
+      <span id="edit-info-id" class="text-xs text-slate-400 mt-1"></span>
+    </div>
+
+    <label class="block text-sm font-medium">
+      タイトル
+      <input type="text" name="title" id="edit-title" required
+             class="mt-1 block w-full rounded-md border-slate-300 dark:border-slate-600 dark:bg-slate-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+    </label>
+    <label class="block text-sm font-medium">
+      説明
+      <textarea name="description" id="edit-description" rows="4"
+                class="mt-1 block w-full rounded-md border-slate-300 dark:border-slate-600 dark:bg-slate-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
+    </label>
+    <div class="grid grid-cols-3 gap-3">
+      <label class="block text-sm font-medium">
+        期限
+        <input type="date" name="due_date" id="edit-due-date"
+               class="mt-1 block w-full rounded-md border-slate-300 dark:border-slate-600 dark:bg-slate-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+      </label>
+      <label class="block text-sm font-medium">
+        対象
+        <select name="target" id="edit-target"
+                class="mt-1 block w-full rounded-md border-slate-300 dark:border-slate-600 dark:bg-slate-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+          {{range .Targets}}
+            <option value="{{.}}">{{.}}</option>
+          {{end}}
+        </select>
+      </label>
+      <label class="block text-sm font-medium">
+        状態
+        <select name="status" id="edit-status"
+                class="mt-1 block w-full rounded-md border-slate-300 dark:border-slate-600 dark:bg-slate-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+          {{range .Statuses}}
+            <option value="{{.}}">{{statusLabel .}}</option>
+          {{end}}
+        </select>
+      </label>
+    </div>
+
+    <dl class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs bg-slate-50 dark:bg-slate-900/40 rounded-lg p-3">
+      <dt class="text-slate-500 dark:text-slate-400">JIRA連携</dt>
+      <dd id="edit-info-jira" class="text-slate-700 dark:text-slate-200"></dd>
+      <dt class="text-slate-500 dark:text-slate-400">表示状態</dt>
+      <dd id="edit-info-tracked" class="text-slate-700 dark:text-slate-200"></dd>
+      <dt class="text-slate-500 dark:text-slate-400">作成日時</dt>
+      <dd id="edit-info-created" class="text-slate-700 dark:text-slate-200"></dd>
+      <dt class="text-slate-500 dark:text-slate-400">完了日時</dt>
+      <dd id="edit-info-closed" class="text-slate-700 dark:text-slate-200"></dd>
+      <dt class="text-slate-500 dark:text-slate-400">最終同期(JIRA)</dt>
+      <dd id="edit-info-synced" class="text-slate-700 dark:text-slate-200"></dd>
+    </dl>
+
+    <div id="edit-info-message" class="hidden text-xs bg-slate-50 dark:bg-slate-900/40 rounded-lg p-3">
+      <div class="font-medium text-slate-600 dark:text-slate-300 mb-1">元発言</div>
+      <div id="edit-info-message-meta" class="text-slate-500 dark:text-slate-400"></div>
+      <div id="edit-info-message-text" class="mt-1 whitespace-pre-wrap text-slate-700 dark:text-slate-200"></div>
+    </div>
+
+    <div class="flex justify-end gap-2 pt-1">
+      <button type="button" id="edit-cancel"
+              class="rounded-md px-4 py-2 text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+        キャンセル
+      </button>
+      <button type="submit"
+              class="rounded-md bg-blue-600 text-white px-4 py-2 text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm">
+        保存
+      </button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="new-task-modal" class="rounded-xl shadow-lg p-0 w-full max-w-md bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 backdrop:backdrop-blur-sm">
+  <form method="post" id="new-task-form" action="/tasks/new"
+        hx-post="/tasks/new" hx-target="#board" hx-swap="outerHTML"
+        hx-vals="js:{...filterStateVals()}"
+        class="p-5 space-y-4">
+    <h2 class="text-lg font-semibold">新規タスク</h2>
+    <p class="text-xs text-slate-500">
+      対象がjira_a/jira_bの場合でも、このパイロットでは実際のJIRA起票は行いません
+      （ログにスタブ出力するのみ）。状態は「未着手」で作成されます。
+    </p>
+    <label class="block text-sm font-medium">
+      タイトル
+      <input type="text" name="title" id="new-task-title" required
+             class="mt-1 block w-full rounded-md border-slate-300 dark:border-slate-600 dark:bg-slate-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+    </label>
+    <label class="block text-sm font-medium">
+      説明
+      <textarea name="description" id="new-task-description" rows="4"
+                class="mt-1 block w-full rounded-md border-slate-300 dark:border-slate-600 dark:bg-slate-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
+    </label>
+    <label class="block text-sm font-medium">
+      期限
+      <input type="date" name="due_date" id="new-task-due-date"
+             class="mt-1 block w-full rounded-md border-slate-300 dark:border-slate-600 dark:bg-slate-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+    </label>
+    <label class="block text-sm font-medium">
+      対象
+      <select name="target" id="new-task-target"
+              class="mt-1 block w-full rounded-md border-slate-300 dark:border-slate-600 dark:bg-slate-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+        {{range .Targets}}
+          <option value="{{.}}">{{.}}</option>
+        {{end}}
+      </select>
+    </label>
+    <div class="flex justify-end gap-2 pt-1">
+      <button type="button" id="new-task-cancel"
+              class="rounded-md px-4 py-2 text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+        キャンセル
+      </button>
+      <button type="submit"
+              class="rounded-md bg-blue-600 text-white px-4 py-2 text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm">
+        追加
+      </button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+  // カードクリックで編集モーダルを開く。非表示トグルボタンのクリックは
+  // 伝播を止めて誤って開かないようにする。標準API(<dialog>)のみ使用、外部ライブラリなし。
+  var editModal = document.getElementById('edit-modal');
+  var editForm = document.getElementById('edit-form');
+
+  // 現在のツールバーのフィルタ状態を、各POST操作へ渡す専用キー名("filter_target"/
+  // "filter_show_untracked")で取得する。edit/newフォーム自身が"target"という
+  // 別の意味のフィールドを持つため、フィルタと同じキー名にすると値が衝突する。
+  function filterStateVals() {
+    var filterForm = document.getElementById('filter-state');
+    var formData = new FormData(filterForm);
+    return {
+      filter_target: formData.get('target') || '',
+      filter_show_untracked: formData.get('show_untracked') || '',
+    };
+  }
+
+  function bindCardActions() {
+    document.querySelectorAll('.card-actions').forEach(function (actions) {
+      actions.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+      });
+    });
+
+    document.querySelectorAll('.card').forEach(function (card) {
+      card.addEventListener('click', function () {
+        var editPath = '/tasks/' + card.dataset.taskId + '/edit';
+        editForm.setAttribute('action', editPath);
+        editForm.setAttribute('hx-post', editPath);
+        htmx.process(editForm);
+
+        document.getElementById('edit-title').value = card.dataset.title;
+        document.getElementById('edit-description').value = card.dataset.description;
+        document.getElementById('edit-target').value = card.dataset.target;
+        document.getElementById('edit-status').value = card.dataset.status;
+        document.getElementById('edit-due-date').value = card.dataset.dueDate;
+
+        document.getElementById('edit-info-id').textContent = '#' + card.dataset.taskId;
+        document.getElementById('edit-info-jira').textContent =
+          card.dataset.jiraKey ? card.dataset.jiraKey : '個人タスク(JIRA未連携)';
+        document.getElementById('edit-info-tracked').textContent =
+          card.dataset.tracked === '1' ? '表示中' : '非表示中';
+        document.getElementById('edit-info-created').textContent = card.dataset.createdAt || '-';
+        document.getElementById('edit-info-closed').textContent = card.dataset.closedAt || '-';
+        document.getElementById('edit-info-synced').textContent = card.dataset.lastSyncedAt || '-';
+
+        var messageBox = document.getElementById('edit-info-message');
+        if (card.dataset.msgText) {
+          messageBox.classList.remove('hidden');
+          document.getElementById('edit-info-message-meta').textContent =
+            [card.dataset.msgSource, card.dataset.msgChannel, card.dataset.msgAuthor, card.dataset.msgReceivedAt]
+              .filter(Boolean).join(' ・ ');
+          document.getElementById('edit-info-message-text').textContent = card.dataset.msgText;
+        } else {
+          messageBox.classList.add('hidden');
+        }
+
+        editModal.showModal();
+      });
+    });
+  }
+  bindCardActions();
+  // #boardがhtmxでswapされた後、新しいカード要素にもイベントを再バインドする。
+  document.body.addEventListener('htmx:afterSwap', function (ev) {
+    if (ev.target && ev.target.id === 'board') {
+      bindCardActions();
+      bindDragAndDrop();
+    }
+  });
+
+  document.getElementById('edit-cancel').addEventListener('click', function () {
+    editModal.close();
+  });
+
+  // 背景(backdrop)クリックで閉じる: dialog要素自身がクリックされた場合のみ閉じる
+  // (中のフォームへのクリックはbubbleしてもtarget !== dialogになるため誤って閉じない)。
+  editModal.addEventListener('click', function (ev) {
+    if (ev.target === editModal) {
+      editModal.close();
+    }
+  });
+
+  // 新規タスク用モーダル(編集モーダルと同じ開閉パターン)。
+  var newTaskModal = document.getElementById('new-task-modal');
+  var newTaskForm = document.getElementById('new-task-form');
+
+  document.getElementById('new-task-btn').addEventListener('click', function () {
+    newTaskForm.reset();
+    newTaskModal.showModal();
+  });
+
+  document.getElementById('new-task-cancel').addEventListener('click', function () {
+    newTaskModal.close();
+  });
+
+  newTaskModal.addEventListener('click', function (ev) {
+    if (ev.target === newTaskModal) {
+      newTaskModal.close();
+    }
+  });
+
+  // 編集・新規作成フォームの送信後、バリデーション成功時のみモーダルを閉じる
+  // (HTTPステータスは常に200で返るため、成功/失敗はレスポンスヘッダー
+  // X-Toast-Categoryで判定する)。
+  document.body.addEventListener('htmx:afterRequest', function (ev) {
+    var elt = ev.detail.elt;
+    if (elt !== editForm && elt !== newTaskForm) {
+      return;
+    }
+    var category = ev.detail.xhr && ev.detail.xhr.getResponseHeader('X-Toast-Category');
+    if (category !== 'error') {
+      var dialog = elt.closest('dialog');
+      if (dialog) {
+        dialog.close();
+      }
+    }
+  });
+
+  // ドラッグ&ドロップでのステータス変更。標準API(HTML5 Drag and Drop)のみ使用、外部ライブラリなし。
+  function bindDragAndDrop() {
+    document.querySelectorAll('.card').forEach(function (card) {
+      card.addEventListener('dragstart', function (ev) {
+        ev.dataTransfer.setData('text/plain', card.dataset.taskId);
+        card.classList.add('opacity-40');
+      });
+      card.addEventListener('dragend', function () {
+        card.classList.remove('opacity-40');
+      });
+    });
+  }
+  bindDragAndDrop();
+
+  // 列の高さ(枠)に関係なく、ポインタのx座標がどの列の左右範囲に入っているかだけで
+  // ドロップ先を決める。これにより、列の枠の下(ページの余白)にドロップしても、
+  // 横方向にその列の範囲内であれば移動できる。
+  function columnAtX(x) {
+    var columns = document.querySelectorAll('.column');
+    for (var i = 0; i < columns.length; i++) {
+      var rect = columns[i].getBoundingClientRect();
+      if (x >= rect.left && x <= rect.right) {
+        return columns[i];
+      }
+    }
+    return null;
+  }
+
+  function clearColumnHighlights() {
+    document.querySelectorAll('.column').forEach(function (c) {
+      c.classList.remove('ring-2', 'ring-blue-400');
+    });
+  }
+
+  document.addEventListener('dragover', function (ev) {
+    ev.preventDefault();
+    var hovered = columnAtX(ev.clientX);
+    clearColumnHighlights();
+    if (hovered) {
+      hovered.classList.add('ring-2', 'ring-blue-400');
+    }
+  });
+
+  document.addEventListener('drop', function (ev) {
+    ev.preventDefault();
+    clearColumnHighlights();
+    var column = columnAtX(ev.clientX);
+    var taskId = ev.dataTransfer.getData('text/plain');
+    if (!column || !taskId) { return; }
+    htmx.ajax('POST', '/tasks/' + taskId + '/move', {
+      target: '#board',
+      swap: 'outerHTML',
+      values: Object.assign({
+        status: column.dataset.status,
+      }, filterStateVals()),
+    });
+  });
+
+  // タブを開きっぱなしにしても他の変更が反映されるよう、定期的に自動リロードする。
+  // ただしモーダル編集中に中身が消えないよう、モーダルが開いている間はスキップする。
+  var AUTO_REFRESH_INTERVAL_MS = 45000;
+  setInterval(function () {
+    if (editModal.open || newTaskModal.open) { return; }
+    var filterForm = document.getElementById('filter-state');
+    htmx.ajax('GET', '/', { target: '#board', swap: 'outerHTML', select: '#board', values: Object.fromEntries(new FormData(filterForm)) });
+  }, AUTO_REFRESH_INTERVAL_MS);
+</script>
+
+{{template "toast" .}}
+</body>
+</html>
+{{end}}
+
+{{define "board"}}
+<div id="board" class="flex gap-4 items-stretch overflow-x-auto pb-4">
+  {{$today := .Today}}
+  {{range $status := .Statuses}}
+  {{$cards := index $.Columns $status}}
+  <div class="column flex flex-col flex-1 min-w-[260px] min-h-[20rem] rounded-xl bg-white dark:bg-slate-800 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 transition-colors"
+       data-status="{{$status}}">
+    <div class="flex items-center gap-2 px-3 pt-3 pb-2 border-b-2 {{accentBarClass $status}} border-opacity-70 rounded-t-xl">
+      <h2 class="font-semibold text-sm">{{statusLabel $status}}</h2>
+      <span class="text-xs font-medium rounded-full px-2 py-0.5 {{accentPillClass $status}}">
+        {{len $cards}}
+      </span>
+      {{if eq $status "done"}}
+      <span class="text-xs text-white/80">(直近{{$.DoneWindowDays}}日以内に完了)</span>
+      {{end}}
+    </div>
+    <div class="flex-1 p-3 space-y-3">
+      {{range $card := $cards}}
+      <div class="card group rounded-lg bg-white dark:bg-slate-900/60 shadow-sm
+                  hover:shadow-md hover:ring-blue-300 dark:hover:ring-blue-600 hover:-translate-y-0.5 transition-all
+                  p-2.5 text-sm cursor-pointer flex items-start gap-2
+                  {{if eq $card.Status "done"}}opacity-60{{end}}
+                  {{if not $card.Tracked}}opacity-60 border-2 border-dashed border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/60{{else}}ring-1 ring-slate-200 dark:ring-slate-700{{end}}"
+           draggable="true" data-task-id="{{$card.ID}}"
+           data-title="{{$card.Title}}"
+           data-description="{{$card.Description}}"
+           data-target="{{$card.Target}}"
+           data-status="{{$card.Status}}"
+           data-jira-key="{{$card.JiraKey}}"
+           data-tracked="{{if $card.Tracked}}1{{else}}0{{end}}"
+           data-created-at="{{$card.CreatedAt}}"
+           data-closed-at="{{$card.ClosedAt}}"
+           data-last-synced-at="{{$card.LastSyncedAt}}"
+           data-due-date="{{$card.DueDate}}"
+           data-msg-source="{{$card.MsgSource}}"
+           data-msg-channel="{{$card.MsgChannel}}"
+           data-msg-author="{{$card.MsgAuthor}}"
+           data-msg-text="{{$card.MsgText}}"
+           data-msg-received-at="{{$card.MsgReceivedAt}}">
+        <div class="min-w-0 flex-1">
+          <div class="font-medium truncate {{if eq $card.Status "done"}}line-through text-slate-400{{end}}">
+            {{$card.Title}}
+          </div>
+          <div class="flex flex-wrap items-center gap-1.5 mt-1 text-xs">
+            <span class="inline-block rounded-full px-2 py-0.5 {{targetPillClass $card.Target}}">
+              {{$card.Target}}
+            </span>
+            {{if not $card.Tracked}}
+            <span class="inline-block font-medium rounded-full px-2 py-0.5 border border-dashed border-slate-400 text-slate-500 dark:text-slate-400">
+              非表示中
+            </span>
+            {{end}}
+            {{if $card.DueDate}}
+            <span class="inline-block rounded-full px-2 py-0.5 font-medium
+                         {{if isOverdue $card.DueDate $today $card.Status}}bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-200{{else}}bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300{{end}}">
+              {{$card.DueDate}}
+            </span>
+            {{end}}
+          </div>
+        </div>
+        <form hx-post="/tasks/{{$card.ID}}/track" hx-target="#board" hx-swap="outerHTML"
+              hx-vals="js:{...filterStateVals()}"
+              class="card-actions shrink-0">
+          <button type="submit"
+                  title="{{if $card.Tracked}}非表示にする{{else}}再表示する{{end}}"
+                  aria-label="{{if $card.Tracked}}非表示にする{{else}}再表示する{{end}}"
+                  class="rounded p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-slate-200 dark:hover:bg-slate-700 transition-colors">
+            {{if $card.Tracked}}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4">
+              <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/>
+              <circle cx="12" cy="12" r="3"/>
+              <line x1="3" y1="3" x2="21" y2="21"/>
+            </svg>
+            {{else}}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4">
+              <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+            {{end}}
+          </button>
+        </form>
+      </div>
+      {{else}}
+      <p class="text-xs text-slate-400 text-center py-6">タスクなし</p>
+      {{end}}
+    </div>
+  </div>
+  {{end}}
+</div>
+{{end}}
+
+{{define "toast"}}
+<div id="toast-container" hx-swap-oob="true">
+  {{if .Toast}}
+  <div class="fixed inset-x-0 bottom-0 z-50 pointer-events-none">
+    <div class="max-w-7xl mx-auto px-4 pb-4 sm:px-6 lg:px-8 space-y-2">
+      <div class="pointer-events-auto rounded-lg px-4 py-2 text-sm shadow-lg {{if eq .Toast.Category "success"}}bg-emerald-100 text-emerald-800 dark:bg-emerald-900/90 dark:text-emerald-200{{else}}bg-rose-100 text-rose-800 dark:bg-rose-900/90 dark:text-rose-200{{end}}">
+        {{.Toast.Message}}
+      </div>
+    </div>
+  </div>
+  {{end}}
+</div>
+{{end}}
+
+{{define "boardAndToast"}}{{template "board" .}}{{template "toast" .}}{{end}}
