@@ -4,10 +4,8 @@
 
 本ドキュメントはこのリポジトリ（`taskmanager`）の**現在の実装**を仕様としてまとめたものである。
 2026-09-12に `/work`（メインリポジトリ）の `docker/task-dashboard/` から独立した別リポジトリ
-`/work/public/taskmanager` へ移動した。
-全体構想（JIRA2プロジェクト＋個人タスクをMattermost/メール/Zoomから自動収集し、JIRA自動起票・
-完了候補提示まで行う）は `/work`（メインリポジトリ）の
-`docs/adr/proposals/task-management-automation.md` を参照。
+`/work/public/taskmanager` へ移動し、全体構想のADRもこのリポジトリへ移動した
+（`docs/adr/proposals/task-management-automation.md`、後述の「関連ドキュメント」参照）。
 本サービスはそのうち「スキーマとダッシュボードUIのパイロット実装」に相当し、**外部通信は
 一切行わない**（Mattermost/メール/Zoom/JIRA/Claude APIいずれにも接続しない。JIRA連携相当の
 操作はすべてログ出力のみのスタブ）。
@@ -168,8 +166,8 @@ JS側もフレームワークなし（素のDOM操作・HTML5 Drag and Drop API�
 
 ## 関連ドキュメント
 
-以下はすべて `/work`（メインリポジトリ、このリポジトリとは別）側にある。
-
-- `docs/adr/proposals/task-management-automation.md` — 全体構想のADR（データモデル・パイプライン全体像）
-- `docs/work-log.md` — 実装の経緯・判断理由（`task-management-automation`セクション）
-- `docs/task-queue.md` — 残タスク・進捗管理
+- `docs/adr/proposals/task-management-automation.md`（このリポジトリ内） — 全体構想のADR
+  （データモデル・パイプライン全体像）
+- 以下は `/work`（メインリポジトリ、このリポジトリとは別）側にある:
+  - `docs/work-log.md` — 実装の経緯・判断理由（`task-management-automation`セクション）
+  - `docs/task-queue.md` — 残タスク・進捗管理
