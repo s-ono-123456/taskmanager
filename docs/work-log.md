@@ -5,6 +5,48 @@
 
 ---
 
+## 2026-09-13 / design.md/ADRを現在の実装内容に合わせて最新化
+
+### やったこと
+
+- ユーザーから直接依頼で、`docs/design/design.md`（旧`docs/design.md`）と
+  `docs/adr/proposals/task-management-automation.md`を、リポジトリの現在の実装内容
+  （Go + sqlc + htmx版）に合わせて見直した。
+- `docs/design.md`が既に`docs/design/design.md`へ未コミットのまま移動済み（内容は
+  移動前と同一）だったため、この移動を完了させ、`README.md`・`CLAUDE.md`・
+  `docs/session-context.md`内の参照パスも`docs/design/design.md`に更新した。
+  `docs/work-log.md`内の過去ログの参照は履歴として書き換えていない。
+- ソース（`main.go`/`internal/web/*.go`/`internal/taskstore/*`/`static/board.js`/
+  `board.html.tmpl`）を通読し、design.mdの記述との突合を行った結果、以下の齟齬を発見・修正:
+  - 「既知の制限」節の「JS無効時はフォームの通常送信（303リダイレクト）にフォールバックする」
+    という記述が誤り（Flask版由来の記述がGo移行時に更新されずそのまま残っていたと見られる）。
+    実際にはhtmx経由かどうかをハンドラ側で判別しておらず、JS無効時も常にボード＋トースト
+    フラグメント（`<html>`/`<head>`を含まない）を返すため、フォーム送信後はヘッダー・
+    ツールバーを失った見た目になる。実態に合わせて記述を修正した。
+  - `internal/taskstore/store.go`の`OpenDB()`が`db.SetMaxOpenConns(1)`でSQLiteの
+    同時書き込み制限に対応している点が未記載だったため追記した。
+- ADR（全体構想）側は、パイロット実装（スキーマ＋ダッシュボードUI）が完了した現状を
+  反映する新規節「パイロット実装との差分」を追加。当初案のFastAPIではなくGoを採用した点、
+  `tasks.status`が2値(open/done)ではなく4値カンバンに拡張されている点、`due_date`列が
+  追加されている点、ADRが想定していた「個人タスクの完全削除」機能は実装されておらず
+  `tracked`フラグの反転による非表示のみが実装されている点、Basic認証が未実装である点を明記。
+  「想定される次の一手」の管理画面実装タスクも完了済みである旨に更新。
+- 冒頭のメタ情報にあった「タスク管理は`/work`側のtask-queue.mdで追跡」という記述は、
+  2026-09-12にタスク管理をこのリポジトリ単体に切り替えた運用（CLAUDE.md参照）と矛盾していた
+  ため削除した。
+
+### 学んだこと・注意点
+
+- ドキュメントとソースの突合は、ディレクトリツリーや業務ルールの説明だけでなく、
+  「既知の制限」のような細部の記述も含めて全ハンドラ・テンプレート・JSを実際に読んで
+  裏取りする必要がある（Flask版からの移行時に更新されずに残っていた記述が1件見つかった）。
+- `docs/design.md → docs/design/design.md`のような未コミットのファイル移動が前セッションで
+  中途半端な状態（session-context.md/work-log.mdへの記録なし）で残っていることがある。
+  今回のように別セッションが引き継ぐ場合は、`git status`で移動・削除の有無を確認し、
+  参照元ファイルの更新も含めて完了させるとよい。
+
+---
+
 ## 2026-09-12 / board.html.tmpl内のJSをstatic/board.jsへ分離
 
 ### やったこと

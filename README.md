@@ -44,7 +44,7 @@ internal/web/                  # HTTPハンドラ・業務ロジック
   templates/board.html.tmpl     # 唯一のテンプレート(html/template、go:embed)
 static/htmx.min.js             # htmx本体(vendor同梱、CDN不使用)
 static/board.js                # ボード画面のJS(board.html.tmplから分離)
-docs/design.md                 # 詳細設計書（データモデル・画面仕様・ルート一覧を網羅）
+docs/design/design.md          # 詳細設計書（データモデル・画面仕様・ルート一覧を網羅）
 ```
 
 ## 実行方法
@@ -75,7 +75,7 @@ docs/design.md                 # 詳細設計書（データモデル・画面�
 
 ## 関連ドキュメント
 
-- `docs/design.md` — データモデル・画面仕様・ルート一覧・デプロイ構成・既知の制限を
+- `docs/design/design.md` — データモデル・画面仕様・ルート一覧・デプロイ構成・既知の制限を
   網羅した詳細設計書。実装を変更する際は必ず参照すること。
 - `docs/adr/proposals/task-management-automation.md` — 全体構想のADR（データモデル・
   パイプライン全体像。まだ未実装のcollector/extractor/syncer/registrar含む）。

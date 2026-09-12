@@ -9,9 +9,9 @@ Mattermost/メール/Zoom/JIRA/Claude APIいずれにも接続せず、JIRA連�
 すべて`stubJiraTransition()`によるログ出力のみ。
 
 プロジェクト概要・技術スタック・ディレクトリ構成・実行方法は`README.md`を参照。
-詳細な業務仕様・データモデル・画面仕様は`docs/design.md`を参照。
+詳細な業務仕様・データモデル・画面仕様は`docs/design/design.md`を参照。
 
-## 誤解しやすい業務ルール（詳細は`docs/design.md`参照）
+## 誤解しやすい業務ルール（詳細は`docs/design/design.md`参照）
 
 - **完了レーンは直近7日以内に完了(`closed_at`)したタスクのみ表示**する
   （`DoneLaneWindowDays`）。7日を超えても データは残り続け、
@@ -34,7 +34,7 @@ Mattermost/メール/Zoom/JIRA/Claude APIいずれにも接続せず、JIRA連�
 
 - `README.md`（本リポジトリ内） — プロジェクト概要・技術スタック・ディレクトリ構成・
   実行方法。
-- `docs/design.md`（本リポジトリ内） — データモデル・画面仕様・ルート一覧・
+- `docs/design/design.md`（本リポジトリ内） — データモデル・画面仕様・ルート一覧・
   デプロイ構成・既知の制限を網羅した詳細設計書。実装を変更する際は必ず参照し、
   変更があれば追記すること。
 - `docs/adr/proposals/task-management-automation.md`（本リポジトリ内） — 全体構想のADR

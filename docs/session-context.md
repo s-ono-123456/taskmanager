@@ -23,6 +23,6 @@
 
 ## 関連ファイル
 
-- `docs/design.md` — 詳細設計書（データモデル・画面仕様・ルート一覧・業務ルール）
+- `docs/design/design.md` — 詳細設計書（データモデル・画面仕様・ルート一覧・業務ルール）
 - `docs/adr/proposals/task-management-automation.md` — 全体構想のADR
 - `CLAUDE.md` — 技術スタック・実行方法・誤解しやすい業務ルール・運用ルール

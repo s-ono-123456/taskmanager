@@ -1,13 +1,16 @@
 # 検討案: タスク管理自動化(JIRA/個人タスク)の設計（task-management-automation）
 
-- 起票: 2026-09-12 / タスクID: `task-management-automation`（`/work`メインリポジトリの
-  docs/task-queue.md 参照。タスク管理・進捗はこのリポジトリではなく`/work`側で追跡している）
+- 起票: 2026-09-12 / タスクID: `task-management-automation`
 - 目的: JIRA2プロジェクト＋個人タスク（Mattermost/メールで飛んでくる、現状管理不在）を対象に、
   (1) Mattermost/メール/Zoomからのタスク自動収集、(2) 打ち合わせ内容からのJIRA自動起票、
   (3) 完了確認による完了候補提示、(4) 画面でのタスク状況確認・更新・削除・クローズ、を実現する
   仕組みを設計する。
 - 状態: 論点A/B/C・情報取り扱い方針とも決定済み（A2・B1・C2採用）。Zoom収集・JIRA連携（2プロジェクト
-  ＋個人タスク）まで含めた実装設計が完了。次は実装フェーズ
+  ＋個人タスク）まで含めた実装設計は完了している。このうち**「スキーマとダッシュボードUI」
+  部分のみパイロット実装済み**（`/work/public/taskmanager`リポジトリ、Go + sqlc + htmx。
+  詳細は`docs/design/design.md`参照）。`collector`/`extractor`/`syncer`/`registrar`/`digest`
+  （Mattermost/JIRA/Zoom/Claude APIとの実連携）は未実装のまま（後述「パイロット実装との差分」
+  参照）。
 
 ## 背景・現状
 
@@ -290,6 +293,35 @@ JIRAとの整合はsyncerが定期的に保つ。DASHからの編集・クロー
 - **技術・アクセス**: 軽量Webアプリ（例: FastAPI＋簡易フロントエンド）としてDockerコンテナ化し、
   自動化パイプラインと同居させSQLiteへ直接アクセスする。ローカルネットワーク/VPN経由での
   ブラウザアクセスを想定し、個人利用のためまずBasic認証程度から始める。
+  **→ 実際にパイロット実装した技術スタックはFastAPIではなくGo + sqlc + htmx（後述「パイロット
+  実装との差分」参照）。Basic認証は未実装のまま。**
+
+### パイロット実装との差分（2026-09-13時点）
+
+上記「管理画面」節までの設計に対し、`/work/public/taskmanager`リポジトリで「スキーマと
+ダッシュボードUI」部分のみを先行してパイロット実装した（外部通信は一切行わず、JIRA連携は
+`stubJiraTransition()`によるログ出力のみ）。実装内容の詳細は`docs/design/design.md`を参照。
+本ADRの設計時点から実際に変わった/まだ実現していない点は以下の通り。
+
+- **技術スタック**: 当初案のFastAPIではなく、Go（標準`net/http`のServeMux + `html/template`）
+  + [sqlc](https://sqlc.dev/) + [htmx](https://htmx.org/)を採用した。「軽量さ」（単一バイナリ・
+  最終イメージ30MB台）と「SQLとロジックの分離」を重視した判断（経緯は
+  `/work/public/taskmanager/docs/work-log.md`参照。当初はPython/Flaskで実装し、その後Goへ
+  全面移行した）。上記「技術スタック」節（Python/`requests`/`anthropic` SDK）は、まだ未実装の
+  collector/extractor/syncer/registrar側の想定であり、パイロット実装済みのダッシュボード部分
+  には適用されていない。
+- **`tasks.status`**: 本ADRのER図では`open`/`done`の2値だが、パイロット実装では
+  `todo`/`in_progress`/`reviewing`/`done`の4値カンバンに拡張されている。
+- **`tasks.due_date`**: 本ADRのER図には無いが、パイロット実装で列を追加した（画面上の期限
+  バッジ表示に使用）。
+- **削除機能**: 本ADRの「削除」節は「個人タスクは完全削除する」としているが、パイロット実装では
+  削除機能自体が存在しない。「追跡フラグ(`tracked`)の反転による非表示」のみが実装されており、
+  非表示にする際は対象が`done`でなければ同時に`status=done`・`closed_at`を設定する（＝一旦完了
+  扱いにする）仕様になっている。JIRA連携タスク・個人タスクの区別なく、削除相当の操作は無い。
+- **認証・アクセス制御**: 本ADRの「Basic認証程度から始める」は未実装。既定で`127.0.0.1`
+  バインド、外部公開しない前提のみで運用している。
+- **`candidates`・`user_map`テーブル**: スキーマ上は本ADRのER図通り用意済みだが、
+  collector/extractor未実装のためダッシュボード側では未使用（器のみ）。
 
 ### 日次まとめ（digest）の構成
 
@@ -322,6 +354,7 @@ Python（リポジトリの既存方針どおりルートの`.venv`/uv環境を�
 2. `project_routing`（監視対象チャンネル/メールフォルダ/Zoom会議シリーズと`project_hint`の対応）
    と`user_map`（主要メンバーの初期データ）を整備する。
 3. collector（mattermost/email/zoom）・extractor・registrar（JIRA登録/個人タスク登録/クローズ
-   実行）・digest（日次まとめ投稿）・管理画面（ダッシュボード）を実装する。
+   実行）・digest（日次まとめ投稿）を実装する（管理画面（ダッシュボード）はスキーマ含め
+   パイロット実装済み。`docs/design/design.md`参照）。
 4. 運用開始後、precision/recall（登録・クローズ候補それぞれ）を継続的にモニタリングし、
    プロンプト・`project_routing`・confidence閾値を調整する。

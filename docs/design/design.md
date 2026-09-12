@@ -39,7 +39,7 @@
 ├── static/
 │   ├── htmx.min.js              # htmx本体(vendor同梱。外部通信ゼロの原則に合わせCDN不使用)
 │   └── board.js                 # ボード画面のJS(board.html.tmplから分離)
-└── docs/design.md              # 本書
+└── docs/design/design.md       # 本書
 ```
 
 技術スタック:
@@ -50,7 +50,10 @@
   ことを最重視している。
 - DBドライバ: `modernc.org/sqlite`（cgo不要の純Go実装）。`CGO_ENABLED=0`でビルドできるため、
   実行イメージを`distroless/static-debian12`にでき、最終イメージは30MB台まで軽量化できる
-  （旧Python版は`python:3.13-slim`ベースで150〜200MB程度）。
+  （旧Python版は`python:3.13-slim`ベースで150〜200MB程度）。SQLiteは複数コネクションからの
+  同時書き込みに弱いため、`internal/taskstore/store.go`の`OpenDB()`で
+  `db.SetMaxOpenConns(1)`により最大コネクション数を1に制限している（Python版の単一
+  コネクション運用と同等の安全性を保つため）。
 - フロントエンド: [htmx](https://htmx.org/)（vendor同梱、`static/htmx.min.js`）+ Tailwind CSS
   （引き続きCDN読み込み）。JSはドラッグ&ドロップ・モーダル開閉など最小限のみ素のDOM操作で
   実装。
@@ -219,8 +222,13 @@ docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$(pwd):/src" -w /src
 - `candidates`・`user_map`テーブルは器のみ用意されており、画面・業務ロジックからは未使用。
 - 認証・アクセス制御は無い。外部公開しない前提（既定では`127.0.0.1`バインド、Docker運用時も
   LAN内利用を想定）。
-- JS無効時はフォームの通常送信（303リダイレクト）にフォールバックするが、その場合トースト
-  通知は表示されない（セッション機構を持たない設計上のトレードオフ）。
+- JS無効時、編集/新規作成フォーム・非表示切替ボタンは通常のHTMLフォーム送信（トップレベル
+  ナビゲーション）にフォールバックする。**ただしハンドラ側はhtmx経由かどうかを判別せず、
+  常にボード＋トーストのHTMLフラグメント（`boardAndToast`テンプレート、`<html>`/`<head>`を
+  含まないフラグメント）を返す**ため、JS無効時にフォーム送信すると、ページ全体がこの
+  フラグメントに置き換わり、Tailwind CSS等を読み込むヘッダーやツールバーが失われた見た目に
+  なる（機能的にはタスクの作成・更新自体は成功する）。セッション機構を持たないため、
+  この経路ではトースト通知も次回操作まで残らない。
 
 ## 関連ドキュメント
 
