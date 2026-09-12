@@ -9,9 +9,9 @@ Mattermost/メール/Zoom/JIRA/Claude APIいずれにも接続せず、JIRA連�
 すべて`stubJiraTransition()`によるログ出力のみ。
 
 プロジェクト概要・技術スタック・ディレクトリ構成・実行方法は`README.md`を参照。
-詳細な業務仕様・データモデル・画面仕様は`docs/design.md`を参照。
+詳細な業務仕様・データモデル・画面仕様は`docs/design/design.md`を参照。
 
-## 誤解しやすい業務ルール（詳細は`docs/design.md`参照）
+## 誤解しやすい業務ルール（詳細は`docs/design/design.md`参照）
 
 - **完了レーンは直近7日以内に完了(`closed_at`)したタスクのみ表示**する
   （`DoneLaneWindowDays`）。7日を超えても データは残り続け、
@@ -34,15 +34,26 @@ Mattermost/メール/Zoom/JIRA/Claude APIいずれにも接続せず、JIRA連�
 
 - `README.md`（本リポジトリ内） — プロジェクト概要・技術スタック・ディレクトリ構成・
   実行方法。
-- `docs/design.md`（本リポジトリ内） — データモデル・画面仕様・ルート一覧・
+- `docs/design/design.md`（本リポジトリ内） — データモデル・画面仕様・ルート一覧・
   デプロイ構成・既知の制限を網羅した詳細設計書。実装を変更する際は必ず参照し、
   変更があれば追記すること。
-- `docs/adr/proposals/task-management-automation.md`（本リポジトリ内） — 全体構想のADR
-  （データモデル・パイプライン全体像。まだ未実装のcollector/extractor/syncer/registrar
-  含む）。
+- `docs/adr/proposals/task-management-automation.md`（本リポジトリ内、索引） — 全体構想の
+  ADR。意思決定の経緯（案の比較・採用理由）を論点ごとのファイルに分割して記録している。
+- `docs/design/task-management-automation.md`（本リポジトリ内） — 全体構想のうち、まだ
+  未実装のcollector/extractor/syncer/registrar/digestを含む確定設計（データモデル・
+  パイプライン全体像）。
+- `docs/adr/README.md`（本リポジトリ内） — ADRとdocs/design/の役割分担・ファイル構成の
+  運用ルール。
 - `docs/session-context.md` / `docs/task-queue.md` / `docs/work-log.md`（本リポジトリ内） —
   進捗管理・作業経緯の記録。2026-09-12より、タスク管理は`/work`側ではなくこのリポジトリ
   単体で行う運用に変更した（詳細は次の「セッションコンテキスト・タスクキュー・ワークログ」章）。
+
+## 設計を検討するとき
+
+複数の実装方針を比較検討する、または設計上の決断を行う場合は、`grilling`スキルを使い、
+前提・トレードオフ・想定していないケースなどをユーザー自身に対して容赦なく問い詰めて
+詳細をしっかり詰めてから結論を出すこと。方針の比較検討の経緯は`docs/adr/README.md`の
+運用ルールに従いADRとして記録する。
 
 ## セッションコンテキスト・タスクキュー・ワークログ
 

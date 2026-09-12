@@ -11,7 +11,7 @@
 `taskmanager`はタスク管理自動化構想（JIRA2プロジェクト＋個人タスクをMattermost/メール/Zoomから
 自動収集し、JIRA自動起票・完了候補提示まで行う）のうち、「スキーマとダッシュボードUIの
 パイロット実装」に相当するリポジトリ。2026-09-12に`/work`（メインリポジトリ）から独立した。
-外部通信は一切行わない（詳細はCLAUDE.md・docs/design.md参照）。
+外部通信は一切行わない（詳細はCLAUDE.md・docs/design/design.md参照）。
 
 ## アクティブセッション
 
@@ -23,6 +23,7 @@
 
 ## 関連ファイル
 
-- `docs/design.md` — 詳細設計書（データモデル・画面仕様・ルート一覧・業務ルール）
-- `docs/adr/proposals/task-management-automation.md` — 全体構想のADR
+- `docs/design/design.md` — 詳細設計書（データモデル・画面仕様・ルート一覧・業務ルール）
+- `docs/adr/proposals/task-management-automation.md`（索引） — 全体構想のADR（論点ごとに分割）
+- `docs/design/task-management-automation.md` — 全体構想のうち未実装部分の確定設計
 - `CLAUDE.md` — 技術スタック・実行方法・誤解しやすい業務ルール・運用ルール

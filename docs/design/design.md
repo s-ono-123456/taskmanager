@@ -8,7 +8,9 @@
 （`docs/adr/proposals/task-management-automation.md`、後述の「関連ドキュメント」参照）。
 本サービスはそのうち「スキーマとダッシュボードUIのパイロット実装」に相当し、**外部通信は
 一切行わない**（Mattermost/メール/Zoom/JIRA/Claude APIいずれにも接続しない。JIRA連携相当の
-操作はすべてログ出力のみのスタブ）。
+操作はすべてログ出力のみのスタブ）。まだ実装していない`collector`/`extractor`/`syncer`/
+`registrar`/`digest`部分の確定設計は`docs/design/task-management-automation.md`にまとめている
+（本書はダッシュボードUI側のみを扱い、重複させない）。
 
 **2026-09-12、Python/Flask実装からGo + sqlc + htmxへ全面移行した。** 「軽量さ」（単一バイナリ
 配布・依存の少なさ）と「ソースコードのわかりやすさ」（特にSQLがロジックから分離されている
@@ -36,8 +38,10 @@
 │   ├── kanban.go                 # 業務ロジック集約(closed_at計算・7日フィルタ・ラベル等)
 │   ├── render.go                 # テンプレートレンダリング
 │   └── templates/board.html.tmpl # 唯一のテンプレート(html/template、go:embed)
-├── static/htmx.min.js          # htmx本体(vendor同梱。外部通信ゼロの原則に合わせCDN不使用)
-└── docs/design.md              # 本書
+├── static/
+│   ├── htmx.min.js              # htmx本体(vendor同梱。外部通信ゼロの原則に合わせCDN不使用)
+│   └── board.js                 # ボード画面のJS(board.html.tmplから分離)
+└── docs/design/design.md       # 本書
 ```
 
 技術スタック:
@@ -48,7 +52,10 @@
   ことを最重視している。
 - DBドライバ: `modernc.org/sqlite`（cgo不要の純Go実装）。`CGO_ENABLED=0`でビルドできるため、
   実行イメージを`distroless/static-debian12`にでき、最終イメージは30MB台まで軽量化できる
-  （旧Python版は`python:3.13-slim`ベースで150〜200MB程度）。
+  （旧Python版は`python:3.13-slim`ベースで150〜200MB程度）。SQLiteは複数コネクションからの
+  同時書き込みに弱いため、`internal/taskstore/store.go`の`OpenDB()`で
+  `db.SetMaxOpenConns(1)`により最大コネクション数を1に制限している（Python版の単一
+  コネクション運用と同等の安全性を保つため）。
 - フロントエンド: [htmx](https://htmx.org/)（vendor同梱、`static/htmx.min.js`）+ Tailwind CSS
   （引き続きCDN読み込み）。JSはドラッグ&ドロップ・モーダル開閉など最小限のみ素のDOM操作で
   実装。
@@ -217,11 +224,19 @@ docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$(pwd):/src" -w /src
 - `candidates`・`user_map`テーブルは器のみ用意されており、画面・業務ロジックからは未使用。
 - 認証・アクセス制御は無い。外部公開しない前提（既定では`127.0.0.1`バインド、Docker運用時も
   LAN内利用を想定）。
-- JS無効時はフォームの通常送信（303リダイレクト）にフォールバックするが、その場合トースト
-  通知は表示されない（セッション機構を持たない設計上のトレードオフ）。
+- JS無効時、編集/新規作成フォーム・非表示切替ボタンは通常のHTMLフォーム送信（トップレベル
+  ナビゲーション）にフォールバックする。**ただしハンドラ側はhtmx経由かどうかを判別せず、
+  常にボード＋トーストのHTMLフラグメント（`boardAndToast`テンプレート、`<html>`/`<head>`を
+  含まないフラグメント）を返す**ため、JS無効時にフォーム送信すると、ページ全体がこの
+  フラグメントに置き換わり、Tailwind CSS等を読み込むヘッダーやツールバーが失われた見た目に
+  なる（機能的にはタスクの作成・更新自体は成功する）。セッション機構を持たないため、
+  この経路ではトースト通知も次回操作まで残らない。
 
 ## 関連ドキュメント
 
-- `docs/adr/proposals/task-management-automation.md`（このリポジトリ内） — 全体構想のADR
-  （データモデル・パイプライン全体像）
+- `docs/adr/proposals/task-management-automation.md`（このリポジトリ内、索引） — 全体構想の
+  ADR。意思決定の経緯（案の比較・採用理由）を論点ごとのファイルに分割して記録している。
+- `docs/design/task-management-automation.md`（このリポジトリ内） — 全体構想のうち、
+  まだ実装していない`collector`/`extractor`/`syncer`/`registrar`/`digest`部分の確定設計
+  （データモデルER図・パイプライン全体像）。
 - `docs/work-log.md` — Go+sqlc+htmxへの移行の経緯・判断理由
