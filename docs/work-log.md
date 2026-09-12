@@ -5,6 +5,29 @@
 
 ---
 
+## 2026-09-12 / board.html.tmpl内のJSをstatic/board.jsへ分離
+
+### やったこと
+
+- ユーザーから直接依頼で、`internal/web/templates/board.html.tmpl`内に埋め込まれていた
+  `<script>...</script>`(カードクリック・モーダル開閉・ドラッグ&ドロップ・htmxイベント
+  連携・自動リフレッシュのJS一式)を`static/board.js`として分離した。
+- JS内にGoテンプレートの`{{...}}`構文が含まれていないことを確認したうえで、中身を
+  そのまま`static/board.js`へ移動し、テンプレート側は`<script src="/static/board.js">`
+  に置き換えた。`main.go`の`//go:embed static`は`static`ディレクトリ全体を対象にして
+  いるため、追加のコード変更なしに`board.js`も配信対象になる。
+- 動作確認: sqlc generate → go build → ローカル起動 → ブラウザで編集モーダル・
+  ドラッグ&ドロップ（列移動）・非表示切替・トースト通知が正しく動作することを確認。
+  最後に`build/Dockerfile`単体でのビルド（sqlc-genステージ込み）も通ることを確認した。
+- `README.md`・`docs/design.md`のディレクトリ構成に`static/board.js`を追記した。
+
+### 学んだこと・今後の参考
+
+- 特になし（Go側のコード変更を伴わない、テンプレートからのJS切り出しのみの
+  シンプルなリファクタリング）。
+
+---
+
 ## 2026-09-12 / sqlc生成コードをコミット・ローカル保存しない方式へ変更
 
 ### やったこと

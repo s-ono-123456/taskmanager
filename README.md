@@ -43,6 +43,7 @@ internal/web/                  # HTTPハンドラ・業務ロジック
   handlers.go / kanban.go / render.go
   templates/board.html.tmpl     # 唯一のテンプレート(html/template、go:embed)
 static/htmx.min.js             # htmx本体(vendor同梱、CDN不使用)
+static/board.js                # ボード画面のJS(board.html.tmplから分離)
 docs/design.md                 # 詳細設計書（データモデル・画面仕様・ルート一覧を網羅）
 ```
 

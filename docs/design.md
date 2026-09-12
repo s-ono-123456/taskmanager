@@ -36,7 +36,9 @@
 │   ├── kanban.go                 # 業務ロジック集約(closed_at計算・7日フィルタ・ラベル等)
 │   ├── render.go                 # テンプレートレンダリング
 │   └── templates/board.html.tmpl # 唯一のテンプレート(html/template、go:embed)
-├── static/htmx.min.js          # htmx本体(vendor同梱。外部通信ゼロの原則に合わせCDN不使用)
+├── static/
+│   ├── htmx.min.js              # htmx本体(vendor同梱。外部通信ゼロの原則に合わせCDN不使用)
+│   └── board.js                 # ボード画面のJS(board.html.tmplから分離)
 └── docs/design.md              # 本書
 ```
 
