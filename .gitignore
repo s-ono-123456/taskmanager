@@ -1,0 +1,6 @@
+# ローカル実行時のSQLite DB(Docker運用時の実データは /docker/task-dashboard/data 側)
+*.db
+
+# Pythonキャッシュ
+__pycache__/
+*.pyc

@@ -1,0 +1,23 @@
+# タスク管理自動化パイロットの管理画面（外部通信なし。全体構想は/work（メインリポジトリ）の
+# docs/adr/proposals/task-management-automation.md参照）。
+# 実データ（SQLite）は /docker/task-dashboard/data に置く（git管理下の外に置き、サイズが
+# 大きい・頻繁に変化するデータを本リポジトリに含めないため）。
+services:
+  task-dashboard:
+    build:
+      context: ..
+      dockerfile: build/Dockerfile
+    image: task-dashboard:latest
+    container_name: task-dashboard
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    environment:
+      TASK_DASHBOARD_HOST: "0.0.0.0"
+      TASK_DASHBOARD_PORT: "8090"
+      TASK_DASHBOARD_DB_PATH: "/data/task_dashboard.db"
+      # パイロット段階のみ: DBが空ならサンプルデータを自動投入する。
+      # collector/extractor等の実連携を組み込んだら "0" にすること。
+      TASK_DASHBOARD_AUTO_SEED: "1"
+    volumes:
+      - /docker/task-dashboard/data:/data
