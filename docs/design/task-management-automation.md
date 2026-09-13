@@ -125,7 +125,7 @@ DBスキーマ・ER図は`docs/design/data-model.md`を参照（パイロット�
     （関係ない古いタスクが完了候補として誤って挙がるのを防ぐ）。
   - 個人タスク・JIRA連携タスクのどちらにも使える。JIRA課題自体には一切影響しない。
 - 管理画面から「追跡しない」「再度追跡する」をワンクリックで切り替え可能にする（可逆操作。
-  削除ボタンは設けない）。ダッシュボードでの実装詳細は`docs/design/design.md`
+  削除ボタンは設けない）。ダッシュボードでの実装詳細は`docs/design/screen-board.md`
   （「非表示」の業務ルール）参照。
 
 ## 収集（収集源ごと）
@@ -175,12 +175,11 @@ due_date/summary`を構造化JSONで抽出する。`target`は`project_hint`が�
 
 クローズ候補（`candidates`のうち`kind=completion`かつ`human_verdict`が未設定の行）は、
 ダッシュボードの「クローズ要求一覧」画面に随時蓄積して表示する
-（[完了候補の承認UI](../adr/complete/completion-approval-ui.md)で採用した
-C3）。ユーザーが任意のタイミングでこの画面を開き、個別またはまとめて承認すると、承認された
-分だけJIRA API／自前ストアでクローズを実行し、`candidates.human_verdict`を`correct`に更新する。
-却下した場合は`false_positive`として記録し、一覧から外す。対象不明の完了報告
-（related_jira_keyが特定できないもの）はクローズ要求一覧には出さず、日次まとめに
-「完了報告はあったが対象タスク不明」として掲載し、人間が手動で対応する。
+（[完了候補の承認UI](../adr/complete/completion-approval-ui.md)で採用したC3）。
+承認/却下の具体的な業務ルールは`docs/design/screen-close-requests.md`を参照（本書では
+重複させない）。対象不明の完了報告（related_jira_keyが特定できないもの）はクローズ要求
+一覧には出さず、日次まとめに「完了報告はあったが対象タスク不明」として掲載し、人間が
+手動で対応する。
 
 ## 管理画面（ダッシュボード）との関係
 
@@ -197,25 +196,17 @@ flowchart LR
     DB --> DIGEST["digest（新規登録・対象不明のみ→Mattermost）"]
 ```
 
-JIRA連携タスクについては、DASHの読み取りは基本ローカルDB（キャッシュ）から行い、正データである
-JIRAとの整合はsyncerが定期的に保つ。DASHからの編集・クローズはJIRA APIへ直接書き込み、成功後に
-ローカルキャッシュへも反映する。
+JIRA連携タスクの読み取り・同期方針は前節「データの実体・同期方針」の通り（重複記述しない）。
 
 ダッシュボード自体の対象データ・一覧/詳細確認・更新・追跡しない/再度追跡する・削除
-（設けない方針）・技術スタックの詳細は、パイロット実装済みの`docs/design/design.md`を参照
-（重複記述しない）。技術スタックの選定は
+（設けない方針）・技術スタックの詳細は、パイロット実装済みの`docs/design/design.md`
+（および画面ごとの`docs/design/screen-board.md`・`docs/design/screen-close-requests.md`）を
+参照（重複記述しない）。技術スタックの選定は
 [ダッシュボードの実装技術](../adr/complete/dashboard-tech.md)、
 statusの粒度は[タスクの進捗管理粒度](../adr/complete/status-granularity.md)、
 削除を設けない方針は[「追跡除外」操作の範囲](../adr/complete/delete-vs-hide.md)
-の採用結果。
-
-**クローズ要求一覧（[完了候補の承認UI](../adr/complete/completion-approval-ui.md)
-のC3で採用、パイロット実装済み）**: `candidates`のうち`kind=completion`かつ`human_verdict`が
-未設定の行を一覧表示し、承認/却下をワンクリックで行える画面をダッシュボードに追加した
-（`POST /candidates/{id}/approve`・`POST /candidates/{id}/reject`）。詳細は前節
-「完了候補提示・クローズ」、実装の詳細は`docs/design/design.md`の「クローズ要求一覧」の
-業務ルール節を参照。ただし実データを投入するcollector/extractorが未実装のため、実運用では
-この画面にデータが表示されない（現状は`seed.go`のサンプルデータでのみ動作確認できる）。
+の採用結果。クローズ要求一覧画面（採用案C3）の業務ルール・現状の制約は
+`docs/design/screen-close-requests.md`を参照。
 
 ## 日次まとめ（digest）の構成
 
@@ -266,4 +257,6 @@ Python（リポジトリの既存方針どおりルートの`.venv`/uv環境を�
   採用理由）を論点ごとに記録したADR（本書の各所からリンクしている個別ファイル参照）。
 - `docs/design/data-model.md` — DBスキーマ・ER図（本書のデータモデルと同一の実装済みスキーマ）。
 - `docs/design/design.md` — 「スキーマとダッシュボードUI」部分のパイロット実装（Go+sqlc+htmx）
-  の詳細設計書。
+  の全体方針。
+- `docs/design/screen-board.md` / `docs/design/screen-close-requests.md` — ダッシュボード
+  各画面（カンバンボード／クローズ要求一覧）の詳細仕様。

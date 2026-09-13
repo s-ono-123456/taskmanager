@@ -45,5 +45,6 @@ C3はダッシュボード側（「クローズ要求一覧」画面、`POST /ca
 
 - `docs/design/task-management-automation.md`（完了候補提示・クローズ、日次まとめの構成。
   C3採用に伴い更新済み）
-- `docs/design/design.md`（「クローズ要求一覧」の業務ルール・ルート一覧。C3の実装詳細）
-- `docs/design/design.md`（C3が画面追加先とするダッシュボードWebアプリの現行仕様）
+- `docs/design/screen-close-requests.md`（「クローズ要求一覧」の業務ルール・ルート一覧。
+  C3の実装詳細）
+- `docs/design/design.md`（C3が画面追加先とするダッシュボードWebアプリの全体方針）

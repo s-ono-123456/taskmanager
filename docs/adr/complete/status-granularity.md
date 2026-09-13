@@ -19,6 +19,6 @@
 
 ## 関連する設計ドキュメント
 
-- `docs/design/design.md`（`internal/web/kanban.go`の`Statuses`/`StatusLabels`、
+- `docs/design/screen-board.md`（`internal/web/kanban.go`の`Statuses`/`StatusLabels`、
   `closedAtForTransition`の実装）
 - `docs/design/task-management-automation.md`（データモデルER図の`tasks.status`）

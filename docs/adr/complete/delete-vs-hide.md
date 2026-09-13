@@ -22,5 +22,5 @@
 
 ## 関連する設計ドキュメント
 
-- `docs/design/design.md`（「非表示」の業務ルール、`handleToggleTrack`の実装、完了レーンの
+- `docs/design/screen-board.md`（「非表示」の業務ルール、`handleToggleTrack`の実装、完了レーンの
   7日フィルタ）

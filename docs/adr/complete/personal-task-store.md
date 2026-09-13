@@ -22,4 +22,5 @@
 
 - `docs/design/task-management-automation.md`（データモデル ER図・`tasks`テーブルの`jira_key`
   の扱い）
-- `docs/design/design.md`（個人タスクを含むダッシュボードUIのパイロット実装）
+- `docs/design/data-model.md`（`tasks`テーブルのスキーマ定義・ER図）
+- `docs/design/design.md`（個人タスクを含むダッシュボードUIのパイロット実装の全体方針）

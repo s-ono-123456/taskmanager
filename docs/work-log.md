@@ -5,6 +5,43 @@
 
 ---
 
+## 2026-09-13 / task-management-automation.mdの重複記述・リンク切れを解消
+
+### やったこと
+
+- ユーザーから「`docs/design/task-management-automation.md`、他と重複し過ぎでは？」という
+  指摘を受け、design.md/data-model.md/screen-board.md/screen-close-requests.mdおよび
+  ADR各ファイルとの内容突き合わせを行った。以下の実質的な重複・リンク切れを発見・修正した:
+  - 「完了候補提示・クローズ」節が、承認/却下の具体的な業務ルール（`GetTaskByJiraKey`による
+    自動解決、`closeTask()`、`human_verdict`の更新等）を`docs/design/screen-close-requests.md`
+    とほぼ同じ内容で重複記述していた → 本書側は概要のみ残し、詳細への参照に置き換えた。
+  - 「管理画面（ダッシュボード）との関係」節に、「データの実体・同期方針」節と同じ
+    JIRA連携タスクの読み取り/同期の説明が丸ごと再掲されていた → 前節への参照に置き換えた。
+  - 同節の「クローズ要求一覧」パラグラフが、screen-close-requests.mdおよびdesign.mdの
+    「既知の制限」と同じ「collector/extractor未実装のため実データが無くseed.goでのみ動作
+    確認できる」という記述を三重に重複させていた → 短い参照に圧縮した。
+  - 過去のdesign.md分割（画面設計・DB設計をscreen-board.md/screen-close-requests.md/
+    data-model.mdへ切り出した際）で、`docs/adr/complete/`配下の複数ファイル
+    （`delete-vs-hide.md`・`completion-approval-ui.md`・`status-granularity.md`・
+    `personal-task-store.md`）と本書自身が、移設済みのセクション名を含めて
+    `docs/design/design.md`を参照したままになっており、リンク切れ（存在しない見出しへの
+    参照）になっていた。すべて移設先（`screen-board.md`/`screen-close-requests.md`/
+    `data-model.md`）に更新した。
+
+### 学んだこと・注意点
+
+- ファイル分割（design.md → data-model.md/screen-*.md）を行った際、分割元ファイルの内部の
+  参照だけでなく、**分割対象だったファイルを既に参照している他のファイル**（今回は
+  ADR側の「関連する設計ドキュメント」節）も同時に洗い出して更新する必要があった。今回は
+  分割時にADR側の更新まで手が回っておらず、後から指摘を受けて気づいた。今後同様の分割を
+  行う際は、`grep -rn "<分割元ファイル名>"`で移動元ファイルへの全参照を洗い出し、分割で
+  実際にどのセクションがどこへ移ったかとの対応表を作ってから一括更新するとよい。
+- 「概要が詳細を要約する」ことと「概要が詳細をそのまま複製する」ことの境界は曖昧になりやすい。
+  今回は「同じ事実が、ほぼ同じ粒度の文章で複数ファイルに存在するか」を基準に重複と判定した
+  （粒度が異なる要約なら許容、同じ粒度の再掲は重複として片方に寄せる）。
+
+---
+
 ## 2026-09-13 / data-model.mdとtask-management-automation.mdのER図重複を解消
 
 ### やったこと
