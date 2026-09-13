@@ -5,6 +5,42 @@
 
 ---
 
+## 2026-09-13 / ADR論点のうち実装完了分をdocs/adr/complete/へ移動
+
+### やったこと
+
+- ユーザーから「ADRのうち、実装まで完了したものはcompleteに入れて」という依頼を受けた。
+  `task-management-automation`索引配下の論点A〜Gはいずれも採用/決定は済んでいたが、
+  「意思決定が済んでいるか」ではなく「対応する実装が実際に完了しているか」を基準に
+  判定した:
+  - 論点A（個人タスク格納先、A2）: `tasks`テーブル（`jira_key`がNULLの行）として実装済み → 移動。
+  - 論点C（完了候補承認UI、C3）: 「クローズ要求一覧」画面として実装済み → 移動。
+  - 論点D（ダッシュボード実装技術、D2）: パイロット全体がGo+sqlc+htmxで実装済み → 移動。
+  - 論点E（status粒度、E2）・論点F（削除vs非表示、F2）: いずれもパイロット実装に反映済み → 移動。
+  - 論点B（収集トリガー、B1）・論点G（情報取り扱い方針、G1）: 決定はしているが、対応する
+    collector/extractorが未実装のため実装物が無い → `docs/adr/proposals/`に残置。
+- `git mv`で5ファイル（`task-management-automation--{a,c,d,e,f}-*.md`）を
+  `docs/adr/proposals/`から`docs/adr/complete/`へ移動。
+- 索引ファイル（`docs/adr/proposals/task-management-automation.md`）の論点一覧テーブル・
+  冒頭の状態行・本文中のリンクを、移動後のパス（`../complete/...`）と実装状況の注記
+  （実装済み/未実装）に合わせて更新した。
+- `docs/design/task-management-automation.md`・`docs/design/screen-close-requests.md`
+  内の該当ファイルへのリンク（`[論点A](../adr/proposals/...)`等）も、移動先
+  （`../adr/complete/...`）に追従させた。`grep`で`proposals/`配下への古いリンクが
+  残っていないことを確認した。
+
+### 学んだこと・注意点
+
+- ADRスキルの`complete`は本来「意思決定が決着したか」を基準にしているが、今回ユーザーは
+  それとは異なる「実装まで終わっているか」という基準を明示的に指定した。同じ`complete`
+  という操作でも、呼び出しごとに判定基準が変わりうるため、機械的にスキルのデフォルト基準
+  だけで判断せず、その場の指示を優先する必要がある。
+- 論点ファイルを`proposals/`→`complete/`へ移動すると、他の設計ドキュメントからの相対パス
+  リンクが壊れる。移動前に`grep -rn`で参照元を洗い出し、移動後にリンク切れが無いことを
+  確認する、という手順が有効だった。
+
+---
+
 ## 2026-09-13 / docs/design/design.mdをDB設計・画面設計・全体方針設計に分割
 
 ### やったこと

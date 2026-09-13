@@ -58,5 +58,5 @@ collector/extractorが未実装のため、実運用では`candidates`テーブ�
 - `docs/design/design.md` — 全体方針・技術スタック・ルート一覧の索引・既知の制限。
 - `docs/design/data-model.md` — `candidates`テーブルのスキーマ詳細。
 - `docs/design/screen-board.md` — メイン画面（カンバンボード）の仕様。
-- `docs/adr/proposals/task-management-automation--c-completion-approval-ui.md` — 本画面の
-  方式（C3）を採用した経緯。
+- `docs/adr/complete/task-management-automation--c-completion-approval-ui.md` — 本画面の
+  方式（C3）を採用した経緯（実装済みのため`docs/adr/complete/`へ移動済み）。

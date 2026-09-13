@@ -4,12 +4,15 @@
 - 目的: JIRA2プロジェクト＋個人タスク（Mattermost/メールで飛んでくる、現状管理不在）を対象に、
   (1) Mattermost/メール/Zoomからのタスク自動収集、(2) 打ち合わせ内容からのJIRA自動起票、
   (3) 完了確認による完了候補提示、(4) 画面でのタスク状況確認・更新・非表示化・クローズ、を
-  実現する仕組みを設計する（「削除」は[論点F](task-management-automation--f-delete-vs-hide.md)
-  の採用により設けない方針）。
+  実現する仕組みを設計する（「削除」は
+  [論点F](../complete/task-management-automation--f-delete-vs-hide.md)の採用により
+  設けない方針）。
 - 種別: 索引（複数論点方式。論点ごとの詳細は下記の個別ファイル参照）
 - 状態: 論点A〜G全て決着（A2・B1・C3・D2・E2・F2・G1採用。論点Cは当初C2を採用したが
-  2026-09-13にC3へ変更）。Zoom収集・JIRA連携（2プロジェクト＋個人タスク）まで含めた
-  実装設計は完了しているが、
+  2026-09-13にC3へ変更）。うち論点A/C/D/E/Fは実装まで完了したため`docs/adr/complete/`へ
+  移動済み。論点B（収集トリガー）・G（情報取り扱い方針）は決定済みだが対応する実装
+  （collector/extractor）が無いため`docs/adr/proposals/`に残している。
+  Zoom収集・JIRA連携（2プロジェクト＋個人タスク）まで含めた実装設計は完了しているが、
   「スキーマとダッシュボードUI」部分のみGo + sqlc + htmxでパイロット実装済み
   （`/work/public/taskmanager`リポジトリ）。`collector`/`extractor`/`syncer`/`registrar`/
   `digest`（Mattermost/JIRA/Zoom/Claude APIとの実連携）は未実装のまま。
@@ -28,13 +31,13 @@
 
 | 論点 | タイトル | 状態 | ファイル |
 |---|---|---|---|
-| A | 個人タスクの格納先 | 採用済み（A2） | [task-management-automation--a-personal-task-store.md](task-management-automation--a-personal-task-store.md) |
-| B | 収集トリガー方式 | 採用済み（B1） | [task-management-automation--b-collection-trigger.md](task-management-automation--b-collection-trigger.md) |
-| C | 完了候補の承認UI | 採用済み（C3、2026-09-13。C2から変更） | [task-management-automation--c-completion-approval-ui.md](task-management-automation--c-completion-approval-ui.md) |
-| D | ダッシュボードの実装技術 | 採用済み（D2） | [task-management-automation--d-dashboard-tech.md](task-management-automation--d-dashboard-tech.md) |
-| E | タスクの進捗管理粒度（`tasks.status`） | 採用済み（E2） | [task-management-automation--e-status-granularity.md](task-management-automation--e-status-granularity.md) |
-| F | 「追跡除外」操作の範囲（削除 vs 非表示） | 採用済み（F2） | [task-management-automation--f-delete-vs-hide.md](task-management-automation--f-delete-vs-hide.md) |
-| G | 会議・メール本文の外部LLM API送信可否 | 決定済み（G1） | [task-management-automation--g-data-handling-policy.md](task-management-automation--g-data-handling-policy.md) |
+| A | 個人タスクの格納先 | 採用済み（A2）・実装済み | [../complete/task-management-automation--a-personal-task-store.md](../complete/task-management-automation--a-personal-task-store.md) |
+| B | 収集トリガー方式 | 採用済み（B1）・未実装（collector未着手） | [task-management-automation--b-collection-trigger.md](task-management-automation--b-collection-trigger.md) |
+| C | 完了候補の承認UI | 採用済み（C3、2026-09-13。C2から変更）・実装済み | [../complete/task-management-automation--c-completion-approval-ui.md](../complete/task-management-automation--c-completion-approval-ui.md) |
+| D | ダッシュボードの実装技術 | 採用済み（D2）・実装済み | [../complete/task-management-automation--d-dashboard-tech.md](../complete/task-management-automation--d-dashboard-tech.md) |
+| E | タスクの進捗管理粒度（`tasks.status`） | 採用済み（E2）・実装済み | [../complete/task-management-automation--e-status-granularity.md](../complete/task-management-automation--e-status-granularity.md) |
+| F | 「追跡除外」操作の範囲（削除 vs 非表示） | 採用済み（F2）・実装済み | [../complete/task-management-automation--f-delete-vs-hide.md](../complete/task-management-automation--f-delete-vs-hide.md) |
+| G | 会議・メール本文の外部LLM API送信可否 | 決定済み（G1）・未実装（extractor未着手） | [task-management-automation--g-data-handling-policy.md](task-management-automation--g-data-handling-policy.md) |
 
 ## 関連する設計ドキュメント
 
