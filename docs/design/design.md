@@ -141,26 +141,71 @@ MattermostのチャンネルIDと`project_hint`の対応をカンマ区切りで
 
 ## 開発時のビルド方法
 
-このリポジトリを触る環境にGo/sqlcがローカルインストールされていない場合、`docker run`経由で
+このリポジトリを触る環境にGo/sqlcがローカルインストールされていない場合、Docker経由で
 ビルド・コード生成を行う（ホストへのインストールは行わない方針）。
 
 **sqlc生成コード（`internal/taskstore/db.go`/`models.go`/`query.sql.go`）はコミットせず、
-ローカルにも置かない。** `go build`の前に必ず`sqlc generate`を実行すること（順序が逆だと
-生成物が無くビルドに失敗する）。
+ローカルにも置かない。**
+
+**`internal/taskstore`をホストのディレクトリへ書き込み可能な状態でバインドマウントして
+`sqlc generate`・`go build`・`go vet`・`go test`等をホスト上で（＝コンテナの`-v host:container`
+経由でホストのファイルシステムへ生成物を書き出す形で）実行することは禁止する。** 過去に
+この方法（後述の「旧手順」）でsqlc生成コードがホストに残留する事故が繰り返し起きたため、
+仕組みとして発生し得ない方法のみを使うこと。
+
+### ビルドが通るかだけ確認したい場合（推奨・デフォルト）
+
+`build/Dockerfile`はsqlc生成〜ビルドまでをすべてコンテナ内の`COPY`（バインドマウントではない）
+だけで完結させているため、**ホスト側には生成物も中間ファイルも一切出力されない**。
 
 ```bash
-# 1. sqlcによるコード生成(internal/taskstore/query.sql・schema.sqlから)
+docker build -f build/Dockerfile -t task-dashboard:verify .
+```
+
+（確認用イメージは不要になったら`docker rmi task-dashboard:verify`で削除してよい。
+`docker compose build`でも同様にホストを汚さず確認できる。）
+
+### `go vet`/`go test`等、ビルド以外のGoコマンドを実行したい場合
+
+ホストのソースを**読み取り専用（`:ro`）でマウントしてDocker named volumeへコピーし、
+以降の生成・ビルド・vet・testはすべてそのvolume内で行う**（volumeはDockerの管理領域であり、
+リポジトリのワーキングディレクトリには存在しない。作業後は`docker volume rm`で破棄する）。
+
+```bash
+docker volume create taskmanager-verify
+
+# 1. ホストのソースを読み取り専用でマウントし、volumeへコピーする
+#    （ホスト側はreadのみ。書き込みは全てvolume側で完結する）
+docker run --rm -v "$(pwd):/src-ro:ro" -v taskmanager-verify:/work alpine \
+  sh -c "cp -a /src-ro/. /work/"
+
+# 2. volume内でsqlc生成
+docker run --rm -v taskmanager-verify:/src -w /src/internal/taskstore sqlc/sqlc generate
+
+# 3. volume内でビルド・vet・test（必要なものだけ実行すればよい）
+docker run --rm -v taskmanager-verify:/src -w /src -e HOME=/tmp golang:1.25-alpine \
+  sh -c "go build -o /tmp/out . && go vet ./... && go test ./..."
+
+# 4. 使い終わったらvolumeを破棄する
+docker volume rm taskmanager-verify
+```
+
+### 旧手順（禁止・参考のみ）
+
+以前は以下のようにホストディレクトリを書き込み可能でバインドマウントする2ステップを
+使っていたが、生成物がホストへそのまま書き出されてしまい、削除し忘れる事故が繰り返し
+起きたため**使用しない**。
+
+```bash
+# 使用しないこと（ホストのinternal/taskstoreへ生成物を直接書き出してしまう）
 docker run --rm --user "$(id -u):$(id -g)" -v "$(pwd)/internal/taskstore:/src" -w /src \
   sqlc/sqlc generate
-
-# 2. ビルド
 docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$(pwd):/src" -w /src \
   golang:1.25-alpine go build -o /src/.build/task-dashboard .
 ```
 
-`--user "$(id -u):$(id -g)"`を付けないと生成物がroot所有になり、ホスト側から編集できなく
-なるので必ず付けること。`build/Dockerfile`はこの2ステップをビルドステージとして
-自動実行するため、`docker compose up --build`等のDocker運用では意識不要。
+`build/Dockerfile`はコンテナ内`COPY`のみでこの2ステップ相当を再現しているため、
+`docker compose up --build`等の通常のDocker運用では上記のような対応は一切不要。
 
 ## 常駐処理（週次ロールオーバー）
 
