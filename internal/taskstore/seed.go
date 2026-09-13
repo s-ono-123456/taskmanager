@@ -31,17 +31,19 @@ type seedCandidate struct {
 }
 
 type seedTask struct {
-	msgIdx       int // -1ならNULL
-	title        string
-	description  string
-	target       string
-	status       string
-	jiraKey      string
-	createdAt    string
-	closedAt     string
-	lastSyncedAt string
-	tracked      int64
-	dueDate      string
+	msgIdx         int // -1ならNULL
+	title          string
+	description    string
+	target         string
+	status         string
+	jiraKey        string
+	createdAt      string
+	closedAt       string
+	lastSyncedAt   string
+	tracked        int64
+	dueDate        string
+	cycleStartDate string // ""ならバックログ、値ありなら所属週の月曜日(YYYY-MM-DD)
+	priority       string // highest/high/medium/low
 }
 
 type seedUserMap struct {
@@ -64,6 +66,12 @@ var seedMessages = []seedMessage{
 	{"zoom", "meeting-3001", "定例会議 2026-09-10", "(meeting summary)",
 		"Next steps: ログ基盤の調査を進める / UIレビューを来週までに完了する",
 		"2026-09-10T18:00:00", "", "jira_a"},
+	{"mattermost", "post-1003", "#project-a", "tanaka",
+		"API仕様書のドラフトを完成させました。ご確認お願いします",
+		"2026-09-12T14:00:00", "", "jira_a"},
+	{"email", "msg-2002", "inbox/personal", "yamada@example.com",
+		"経費精算の提出、終わりました",
+		"2026-09-12T16:00:00", "", "personal"},
 }
 
 var seedCandidates = []seedCandidate{
@@ -77,21 +85,25 @@ var seedCandidates = []seedCandidate{
 		"ログ基盤の調査", "", ""},
 	{3, "task", 0.4, "unknown", "", "", "",
 		"UIレビューを来週までに完了する", "", ""},
+	{4, "completion", 0.8, "jira_a", "tanaka", "tanaka.k", "",
+		"API仕様書ドラフト完成の報告", "PROJA-101", ""},
+	{5, "completion", 0.65, "personal", "yamada@example.com", "", "",
+		"経費精算完了の報告", "", ""},
 }
 
 var seedTasks = []seedTask{
 	{0, "API仕様書をまとめる", "元発言: post-1001（#project-a）", "jira_a", "todo",
-		"PROJA-101", "2026-09-08T10:05:00", "", "2026-09-12T09:00:00", 1, "2026-09-10"},
+		"PROJA-101", "2026-09-08T10:05:00", "", "2026-09-12T09:00:00", 1, "2026-09-10", "2026-09-07", "high"},
 	{1, "バグ修正: ログイン画面のエラー", "元発言: post-1002（#project-b）", "jira_b", "done",
-		"PROJB-42", "2026-09-05T11:00:00", "2026-09-10T15:35:00", "2026-09-12T09:00:00", 1, ""},
+		"PROJB-42", "2026-09-05T11:00:00", "2026-09-10T15:35:00", "2026-09-12T09:00:00", 1, "", "", "highest"},
 	{2, "資料レビュー", "依頼元: yamada@example.com", "personal", "in_progress",
-		"", "2026-09-09T09:20:00", "", "", 1, "2026-09-20"},
+		"", "2026-09-09T09:20:00", "", "", 1, "2026-09-20", "2026-09-07", "medium"},
 	{-1, "旧: サーバー証明書更新", "過去に完了・追跡除外済みの例", "jira_a", "done",
-		"PROJA-88", "2026-08-01T09:00:00", "2026-08-20T17:00:00", "2026-08-21T09:00:00", 0, ""},
+		"PROJA-88", "2026-08-01T09:00:00", "2026-08-20T17:00:00", "2026-08-21T09:00:00", 0, "", "", "low"},
 	{-1, "個人: 経費精算", "個人タスクの例", "personal", "todo",
-		"", "2026-09-11T08:00:00", "", "", 1, ""},
+		"", "2026-09-11T08:00:00", "", "", 1, "", "", "medium"},
 	{-1, "個人: 昔のメモ整理", "完了済み・追跡除外の個人タスクの例", "personal", "done",
-		"", "2026-07-01T09:00:00", "2026-07-05T09:00:00", "", 0, ""},
+		"", "2026-07-01T09:00:00", "2026-07-05T09:00:00", "", 0, "", "", "low"},
 }
 
 var seedUserMaps = []seedUserMap{
@@ -191,6 +203,8 @@ func Seed(ctx context.Context, db *sql.DB) error {
 			LastSyncedAt:    nullStr(t.lastSyncedAt),
 			Tracked:         t.tracked,
 			DueDate:         nullStr(t.dueDate),
+			CycleStartDate:  nullStr(t.cycleStartDate),
+			Priority:        t.priority,
 		}); err != nil {
 			return fmt.Errorf("insert task %d: %w", i, err)
 		}

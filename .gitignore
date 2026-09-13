@@ -9,3 +9,8 @@
 /internal/taskstore/db.go
 /internal/taskstore/models.go
 /internal/taskstore/query.sql.go
+
+# Mattermost Bot Token等の認証情報をローカルで保持する場合用(compose/docker-compose.ymlが
+# ${VAR}展開で読む。実トークン値はコミットしない)
+.env
+compose/.env

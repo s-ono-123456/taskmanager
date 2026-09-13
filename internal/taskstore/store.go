@@ -56,6 +56,51 @@ func InitSchema(ctx context.Context, db *sql.DB) error {
 			return fmt.Errorf("add due_date column: %w", err)
 		}
 	}
+
+	// 既存DB(cycle_start_date列がまだ無いもの)へのマイグレーション。
+	hasCycleStartDate, err := columnExists(ctx, db, "tasks", "cycle_start_date")
+	if err != nil {
+		return fmt.Errorf("check cycle_start_date column: %w", err)
+	}
+	if !hasCycleStartDate {
+		if _, err := db.ExecContext(ctx, "ALTER TABLE tasks ADD COLUMN cycle_start_date TEXT"); err != nil {
+			return fmt.Errorf("add cycle_start_date column: %w", err)
+		}
+	}
+
+	// 既存DB(priority列がまだ無いもの)へのマイグレーション。DEFAULT付きなので既存行にも
+	// 自動的に'medium'が入る。
+	hasPriority, err := columnExists(ctx, db, "tasks", "priority")
+	if err != nil {
+		return fmt.Errorf("check priority column: %w", err)
+	}
+	if !hasPriority {
+		if _, err := db.ExecContext(ctx, "ALTER TABLE tasks ADD COLUMN priority TEXT NOT NULL DEFAULT 'medium'"); err != nil {
+			return fmt.Errorf("add priority column: %w", err)
+		}
+	}
+
+	// 既存DB(messages.permalink_url列がまだ無いもの)へのマイグレーション。
+	hasPermalinkURL, err := columnExists(ctx, db, "messages", "permalink_url")
+	if err != nil {
+		return fmt.Errorf("check permalink_url column: %w", err)
+	}
+	if !hasPermalinkURL {
+		if _, err := db.ExecContext(ctx, "ALTER TABLE messages ADD COLUMN permalink_url TEXT"); err != nil {
+			return fmt.Errorf("add permalink_url column: %w", err)
+		}
+	}
+
+	// 既存DB(candidates.suggested_task_id列がまだ無いもの)へのマイグレーション。
+	hasSuggestedTaskID, err := columnExists(ctx, db, "candidates", "suggested_task_id")
+	if err != nil {
+		return fmt.Errorf("check suggested_task_id column: %w", err)
+	}
+	if !hasSuggestedTaskID {
+		if _, err := db.ExecContext(ctx, "ALTER TABLE candidates ADD COLUMN suggested_task_id INTEGER REFERENCES tasks(id)"); err != nil {
+			return fmt.Errorf("add suggested_task_id column: %w", err)
+		}
+	}
 	return nil
 }
 

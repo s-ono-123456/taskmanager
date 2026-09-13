@@ -1,5 +1,5 @@
-# タスク管理自動化パイロットの管理画面（外部通信なし。全体構想は/work（メインリポジトリ）の
-# docs/adr/proposals/task-management-automation.md参照）。
+# タスク管理自動化パイロットの管理画面（外部通信は原則なし。唯一の例外はMattermost
+# collector、後述の環境変数参照。全体構想は docs/design/automation-roadmap.md 参照）。
 # 実データ（SQLite）は /docker/task-dashboard/data に置く（git管理下の外に置き、サイズが
 # 大きい・頻繁に変化するデータを本リポジトリに含めないため）。
 services:
@@ -19,5 +19,20 @@ services:
       # パイロット段階のみ: DBが空ならサンプルデータを自動投入する。
       # collector/extractor等の実連携を組み込んだら "0" にすること。
       TASK_DASHBOARD_AUTO_SEED: "1"
+      # Mattermost collector用(任意)。ホスト側の環境変数、またはcompose/.env
+      # (git管理外、.gitignore対象)から値を引き継ぐ。未設定なら空文字のままで
+      # collectorは起動しない(internal/mattermost.LoadConfigFromEnv参照)。
+      # 実際のトークン値はこのファイルにもリポジトリのどこにも書かないこと。
+      MATTERMOST_BOT_TOKEN: ${MATTERMOST_BOT_TOKEN:-}
+      MATTERMOST_SERVER_URL: ${MATTERMOST_SERVER_URL:-}
+      MATTERMOST_CHANNEL_ROUTES: ${MATTERMOST_CHANNEL_ROUTES:-}
+      # Mattermost extractorが分類に使うローカルLLM(llama-swap、外部通信ではなくホスト上の
+      # サービスへの接続)。未設定時のデフォルトはinternal/mattermost.LoadConfigFromEnv参照。
+      MATTERMOST_EXTRACTOR_LLM_URL: ${MATTERMOST_EXTRACTOR_LLM_URL:-}
+      MATTERMOST_EXTRACTOR_LLM_MODEL: ${MATTERMOST_EXTRACTOR_LLM_MODEL:-}
+    # host.docker.internal経由でホスト上のllama-swap(ポート8080)へ到達するため
+    # (Linuxのbridgeネットワークではhost.docker.internalが既定で解決されないため明示指定)。
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - /docker/task-dashboard/data:/data

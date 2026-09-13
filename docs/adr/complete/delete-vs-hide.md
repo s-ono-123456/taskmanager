@@ -1,6 +1,6 @@
-# 論点: 「追跡除外」操作の範囲（削除 vs 非表示）（task-management-automation--f-delete-vs-hide）
+# 論点: 「追跡除外」操作の範囲（削除 vs 非表示）
 
-- 起票: 2026-09-12 / 親タスク: `task-management-automation`（docs/adr/proposals/task-management-automation.md 参照）
+- 起票: 2026-09-12 / タスク管理自動化構想の一部（`docs/design/automation-roadmap.md` 参照）
 - 論点: 画面上で不要になったタスクをどう扱うか。データ自体を消す「削除」を設けるか、
   ローカルキャッシュには残したまま画面表示や同期の対象からだけ外す「非表示」に留めるか。
 - 状態: **採用済み（F2、2026-09-12、パイロット実装で確定）**
@@ -22,5 +22,5 @@
 
 ## 関連する設計ドキュメント
 
-- `docs/design/design.md`（「非表示」の業務ルール、`handleToggleTrack`の実装、完了レーンの
+- `docs/design/screen-board.md`（「非表示」の業務ルール、`handleToggleTrack`の実装、完了レーンの
   7日フィルタ）

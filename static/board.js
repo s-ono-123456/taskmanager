@@ -34,8 +34,11 @@ function bindCardActions() {
       document.getElementById('edit-target').value = card.dataset.target;
       document.getElementById('edit-status').value = card.dataset.status;
       document.getElementById('edit-due-date').value = card.dataset.dueDate;
+      document.getElementById('edit-priority').value = card.dataset.priority;
 
       document.getElementById('edit-info-id').textContent = '#' + card.dataset.taskId;
+      document.getElementById('edit-info-cycle').textContent =
+        card.dataset.cycle ? '今週（週開始: ' + card.dataset.cycle + '）' : 'バックログ';
       document.getElementById('edit-info-jira').textContent =
         card.dataset.jiraKey ? card.dataset.jiraKey : '個人タスク(JIRA未連携)';
       document.getElementById('edit-info-tracked').textContent =
@@ -51,6 +54,13 @@ function bindCardActions() {
           [card.dataset.msgSource, card.dataset.msgChannel, card.dataset.msgAuthor, card.dataset.msgReceivedAt]
             .filter(Boolean).join(' ・ ');
         document.getElementById('edit-info-message-text').textContent = card.dataset.msgText;
+        var messageUrl = document.getElementById('edit-info-message-url');
+        if (card.dataset.msgUrl) {
+          messageUrl.href = card.dataset.msgUrl;
+          messageUrl.classList.remove('hidden');
+        } else {
+          messageUrl.classList.add('hidden');
+        }
       } else {
         messageBox.classList.add('hidden');
       }
@@ -99,6 +109,42 @@ newTaskModal.addEventListener('click', function (ev) {
   }
 });
 
+// クローズ要求一覧モーダル(論点C3)。承認/却下を続けて処理できるよう、
+// 編集・新規作成モーダルと違って送信後も自動では閉じない(htmx:afterRequestの対象外)。
+var closeRequestsModal = document.getElementById('close-requests-modal');
+
+document.getElementById('close-requests-btn').addEventListener('click', function () {
+  closeRequestsModal.showModal();
+});
+
+document.getElementById('close-requests-cancel').addEventListener('click', function () {
+  closeRequestsModal.close();
+});
+
+closeRequestsModal.addEventListener('click', function (ev) {
+  if (ev.target === closeRequestsModal) {
+    closeRequestsModal.close();
+  }
+});
+
+// タスク候補一覧モーダル。クローズ要求一覧と同じく、連続して承認/却下できるよう
+// 送信後も自動では閉じない。
+var taskCandidatesModal = document.getElementById('task-candidates-modal');
+
+document.getElementById('task-candidates-btn').addEventListener('click', function () {
+  taskCandidatesModal.showModal();
+});
+
+document.getElementById('task-candidates-cancel').addEventListener('click', function () {
+  taskCandidatesModal.close();
+});
+
+taskCandidatesModal.addEventListener('click', function (ev) {
+  if (ev.target === taskCandidatesModal) {
+    taskCandidatesModal.close();
+  }
+});
+
 // 編集・新規作成フォームの送信後、バリデーション成功時のみモーダルを閉じる
 // (HTTPステータスは常に200で返るため、成功/失敗はレスポンスヘッダー
 // X-Toast-Categoryで判定する)。
@@ -130,11 +176,29 @@ function bindDragAndDrop() {
 }
 bindDragAndDrop();
 
-// 列の高さ(枠)に関係なく、ポインタのx座標がどの列の左右範囲に入っているかだけで
-// ドロップ先を決める。これにより、列の枠の下(ページの余白)にドロップしても、
-// 横方向にその列の範囲内であれば移動できる。
-function columnAtX(x) {
-  var columns = document.querySelectorAll('.column');
+// ドロップ先は「スイムレーン行(y座標)」→「ステータス列(x座標)」の2段階で決定する。
+// まずY座標で.lane-row(今週/バックログ)を特定し、次にその行の内側に限定して、
+// 列の高さ(枠)に関係なくx座標がどの列の左右範囲に入っているかだけで列を決める
+// (これにより、列の枠の下(行内の余白)にドロップしても、横方向にその列の範囲内で
+// あれば移動できる、という既存の寛容な挙動を維持する)。
+
+// スイムレーン行の当たり判定に余裕を持たせるための追加マージン(px)。行間のgap-6(24px)
+// より小さい値にして、2行の拡張ヒット領域が重ならないようにする(誤操作防止)。
+var LANE_HIT_MARGIN_PX = 10;
+
+function laneRowAtY(y) {
+  var rows = document.querySelectorAll('.lane-row');
+  for (var i = 0; i < rows.length; i++) {
+    var rect = rows[i].getBoundingClientRect();
+    if (y >= rect.top - LANE_HIT_MARGIN_PX && y <= rect.bottom + LANE_HIT_MARGIN_PX) {
+      return rows[i];
+    }
+  }
+  return null;
+}
+
+function columnAtX(container, x) {
+  var columns = container.querySelectorAll('.column');
   for (var i = 0; i < columns.length; i++) {
     var rect = columns[i].getBoundingClientRect();
     if (x >= rect.left && x <= rect.right) {
@@ -142,6 +206,12 @@ function columnAtX(x) {
     }
   }
   return null;
+}
+
+function dropTargetAt(x, y) {
+  var laneRow = laneRowAtY(y);
+  if (!laneRow) { return null; }
+  return columnAtX(laneRow, x);
 }
 
 function clearColumnHighlights() {
@@ -152,7 +222,7 @@ function clearColumnHighlights() {
 
 document.addEventListener('dragover', function (ev) {
   ev.preventDefault();
-  var hovered = columnAtX(ev.clientX);
+  var hovered = dropTargetAt(ev.clientX, ev.clientY);
   clearColumnHighlights();
   if (hovered) {
     hovered.classList.add('ring-2', 'ring-blue-400');
@@ -162,7 +232,7 @@ document.addEventListener('dragover', function (ev) {
 document.addEventListener('drop', function (ev) {
   ev.preventDefault();
   clearColumnHighlights();
-  var column = columnAtX(ev.clientX);
+  var column = dropTargetAt(ev.clientX, ev.clientY);
   var taskId = ev.dataTransfer.getData('text/plain');
   if (!column || !taskId) { return; }
   htmx.ajax('POST', '/tasks/' + taskId + '/move', {
@@ -170,6 +240,7 @@ document.addEventListener('drop', function (ev) {
     swap: 'outerHTML',
     values: Object.assign({
       status: column.dataset.status,
+      cycle: column.dataset.lane,
     }, filterStateVals()),
   });
 });

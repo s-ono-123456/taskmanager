@@ -17,24 +17,26 @@
 
 ## ファイル構成
 
-- 検討中の案は `docs/adr/proposals/<task-slug>.md` に作成する（`docs/task-queue.md` の ID と
-  同じスラッグ）。
-- **論点（比較すべき方針が複数ある観点）が1つ、または漠然としている検討**: 上記の
-  `<task-slug>.md` 1ファイルに、背景・方針案テーブル・採用理由をまとめる（従来形式）。
-- **独立した論点が2つ以上ある検討**: `<task-slug>.md` を「索引ファイル」とし
-  （メタ情報に `- 種別: 索引（複数論点方式）` を明記）、論点ごとの詳細を
-  `docs/adr/proposals/<task-slug>--<point-slug>.md` というフラットな命名で分割する
-  （サブディレクトリは使わない。索引ファイルのパスを不変に保つことで、他ドキュメントからの
-  参照リンクを書き換えずに済ませるため）。索引ファイルには論点一覧表（論点/タイトル/状態/
-  ファイルへのリンク）を置く。
-  - 常に分割する必要はない。判断基準・具体的なテンプレートは `adr` スキル
-    （`create`/`split`サブコマンド）参照。
-- 検討が完了した（採用可否の判断まで終わった）資料は `docs/adr/complete/` へ移動する
-  （索引方式の場合は索引ファイル・論点ファイルとも、または論点単位でも移動できる）。
-  完了の経緯・実測の詳細は `docs/work-log.md` に記録し、資料本体には結果サマリを残す。
+- 検討中の案は `docs/adr/proposals/<topic-slug>.md` に作成する。1ファイル1論点
+  （比較すべき方針が1つに絞れる単位）とする。
+- **ファイル名は内容を表す平易な英字kebab-caseの名前のみとする**（例:
+  `personal-task-store.md`、`dashboard-tech.md`）。タスクIDや連番・記号による接頭辞
+  （`<task-slug>--...`、`a-`/`b-`等）は付けない。複数の観点にまたがる大きな検討を進める際も、
+  観点ごとに独立したファイルへ直接分けて作成し、それらをまとめる「索引ファイル」は作らない
+  （論点が分かれているなら、それらをまとめるファイル自体に価値が薄いため）。同じ広い構想に
+  属することは、各ファイル冒頭のメタ情報に「〜構想の一部（`docs/design/xxx.md` 参照）」等の
+  一文で示す。
+- どの広い構想に属するファイルが他にあるかを知りたい場合は、対応する`docs/design/`側の
+  設計ドキュメントから各論点ファイルへリンクが張られているので、そちらを起点に辿る。
+- 検討が完了した（採用可否の判断まで終わり、対応する実装があればそれも完了した）ファイルは
+  `docs/adr/complete/` へ`git mv`する。完了の経緯・実測の詳細は `docs/work-log.md` に記録し、
+  資料本体には結果サマリを残す。
 
 ## 例
 
-- `task-management-automation.md`（索引ファイル）＋
-  `task-management-automation--a-personal-task-store.md` 等（論点ファイル）＋
-  `docs/design/task-management-automation.md`（確定設計）という構成が、この使い分けの実例。
+「タスク管理自動化」という広い構想に属する複数の意思決定は、
+`docs/adr/complete/personal-task-store.md`・`docs/adr/complete/dashboard-tech.md`・
+`docs/adr/complete/collection-trigger.md`等、観点ごとに独立したファイルとして存在する
+（索引ファイルは無い）。全体像は`docs/design/automation-roadmap.md`（未実装部分の詳細は
+そこからリンクする`docs/design/mail-zoom-pipeline.md`・`jira-sync.md`・`digest.md`）が
+各ファイルへリンクする形でまとめている。

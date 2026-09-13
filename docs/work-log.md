@@ -5,6 +5,742 @@
 
 ---
 
+## 2026-09-13 / data-model.mdからMattermost extractorの節を独立ファイルへ分離
+
+### やったこと
+
+- 直前にtask-management-automation.mdを機能別に4ファイル（automation-roadmap/mail-zoom-pipeline/
+  jira-sync/digest）へ分割した際、Mattermost実装済み部分だけは新規ファイルを作らず
+  `docs/design/data-model.md`の1節に統合した。ユーザーから「jiraやmail,zoomは別ファイルが
+  あるのにMattermostはどこ行った？」と指摘を受け、他の未実装機能と扱いが非対称
+  （実装済みで最も内容の多いMattermost extractorだけがDBスキーマ専用ドキュメントに
+  埋め込まれていた）になっていたことに気づいた。data-model.md自体も冒頭で「本書はDBスキーマ
+  自体の設計のみを扱う」と明記しており、Mattermost extractor節（AI選定・バッチ化・登録フロー・
+  対象タスクAI推定・保存方針・カーソル管理・原子性等、スキーマ以外の内容を多く含む）は
+  その方針とも矛盾していた。
+- `docs/design/mattermost-extractor.md`を新設し、該当節をdata-model.mdから移動。data-model.md
+  はテーブル一覧・ER図・マイグレーション注意点等、DBスキーマの話題のみに戻した。
+- data-model.mdの新ファイルへの参照を含め、`docs/design/mattermost-extractor.md`「Mattermost
+  extractor」節を指していた全箇所（ADR6本の関連ドキュメント欄、automation-roadmap.md・
+  mail-zoom-pipeline.md・screen-close-requests.md・screen-task-candidates.md・screen-board.md・
+  internal/mattermost/collector.goのコメント）を新ファイルへのリンクに更新した。
+- `sqlc generate`→`go build`で確認。
+
+### 学んだこと
+
+- 「機能別に分ける」という指示を実行する際、実装済み/未実装という軸だけで機能の扱いを
+  変える（未実装機能は独立ファイル、実装済み機能は既存ドキュメントへ統合）と、一覧性が
+  崩れて不自然に見える。ユーザーが「他と同じように」を期待している場合は、実装状況に
+  関わらず機能単位の粒度を揃えるべきだった。
+
+---
+
+## 2026-09-13 / task-management-automation.mdを機能別に分割
+
+### やったこと
+
+- ユーザーから「`docs/design/task-management-automation.md`をなくしたい。適切に分割して
+  機能別に設計書を分けて」との依頼があった。同ファイルは「未実装のsyncer/registrar/digest」
+  の確定設計という位置づけだったが、実際にはMattermost実装済み部分の記述（他ドキュメントと
+  重複・一部陳腐化）と、真に未実装の複数機能（メール/Zoom収集・抽出・登録、JIRA同期、
+  日次まとめ、全体構想の背景・リスク・ロードマップ）が1ファイルに混在していた。
+- 次の4ファイルへ分割した:
+  - `docs/design/automation-roadmap.md` — 全体像・背景・パイプライン概念図・リスク・
+    ロードマップ（横断的な内容）。
+  - `docs/design/mail-zoom-pipeline.md` — メール/Zoom分の収集・抽出・登録・完了候補提示
+    （未実装、Claude API前提）。
+  - `docs/design/jira-sync.md` — JIRA同期方針（syncer、未実装）＋追跡フラグとの関係。
+  - `docs/design/digest.md` — 日次まとめ(digest)の構成（未実装）。
+- Mattermost実装済み部分の記述（収集の10分間隔・`MATTERMOST_CHANNEL_ROUTES`など）は、
+  重複させず`docs/design/data-model.md`「Mattermost extractor」節に統合した
+  （直前のやり取りでユーザーから「10分おきのプロセスはどこに書いた」と聞かれた際、
+  task-management-automation.mdの1箇所にしか書かれておらず見つけにくかった反省を踏まえ、
+  実装済みextractorの確定仕様として一元化した）。
+- 元ファイルを参照していた21ファイル（README.md・CLAUDE.md・docs/adr/README.md・
+  docs/session-context.md・docs/design/配下・docs/adr/complete｜proposals/配下14ファイル・
+  internal/mattermost/・internal/taskstore/schema.sql・compose/docker-compose.yml）を
+  すべて洗い出し、分割後の適切なファイルへのリンクに更新した（`docs/work-log.md`自体の
+  過去ログは記録として書き換えない）。
+- `sqlc generate`→`go build`で最終確認。
+
+### 学んだこと
+
+- 「全体構想の未実装部分」を1ファイルにまとめる設計は、実装が進むにつれて「一部実装済み・
+  一部未実装」が同一ファイル内に混在し続け、更新漏れ（前回コミットで直したはずの記述が
+  別の未更新箇所に残る）を誘発しやすかった。機能単位（メール/Zoom、JIRA同期、digest）に
+  最初から分けておけば、実装が進んだ機能のファイルだけを差し替え/削除すればよく、
+  ドキュメントの陳腐化に気づきやすい。
+
+---
+
+## 2026-09-13 / ADR内容をdocs/design/へ反映（ドキュメント整合性の見直し）
+
+### やったこと
+
+- ユーザーから「ADRに書かれていること、実装したことを設計に落として」との依頼があり、
+  `docs/adr/complete/`配下の全ADRが`docs/design/`側に反映済みか棚卸しした
+  （各ADRのslugが`docs/design/*.md`・`CLAUDE.md`のいずれかから参照されているかを機械的に確認）。
+- `docs/design/task-management-automation.md`の「完了候補提示・クローズ」節が、
+  `close-request-target-task-suggestion`のADR内容を反映しておらず「対象タスク推定は
+  未実装」という古い記述のままだったため更新した。あわせて、同節の「対象不明の完了報告は
+  日次まとめに掲載する」という記述も、実際にはdigest自体が未実装で運用されておらず、実装済みの
+  Mattermost分は`related_jira_key`の有無に関わらずクローズ要求一覧に出す、という実態に合わせて
+  修正した。
+- `docs/design/data-model.md`のMattermost extractor節に、対象タスクAI推定の仕様
+  （前回コミットでER図・`candidates`テーブル説明には反映済みだったが、箇条書きの仕様一覧には
+  漏れていた）と、直前に実装したトランザクション化（原子性）の仕様を追記した。
+
+### 学んだこと
+
+- ADRの実装完了後、対応する`docs/design/`側への反映を1回のコミットで済ませたつもりでも、
+  同じ内容に言及している別の設計文書（今回は`task-management-automation.md`という、
+  全体構想を扱う別ファイル）に古い記述が残っていることがある。ADR完了時は、そのADRのslugで
+  リポジトリ全体を検索し、関連する設計文書すべてを洗い出してから反映するべきだった。
+
+---
+
+## 2026-09-13 / クローズ要求一覧の対象タスクAI推定を実装
+
+### やったこと
+
+- ユーザーから「クローズ要求一覧で対象タスクが自動的に選択されないのが微妙。AIで判断して
+  デフォルト設定してほしい」との要望があり、grillingスキルで設計を詰めた後
+  （`docs/adr/complete/close-request-target-task-suggestion.md`）、実装した。
+- Mattermost extractorの`Classify`呼び出しに、対象プロジェクトの未クローズタスク一覧
+  （`ListOpenTasksByTarget`、id+titleのみ）をプロンプトへ追加し、`kind=completion`かつ
+  `related_jira_key`が無い候補についてLLMに対象タスクを推定させるようにした
+  （`internal/mattermost/llm.go`の`ClassifyResult.RelatedTaskID`）。結果は`candidates`の
+  新規列`suggested_task_id`に保存し（`internal/mattermost/collector.go`の
+  `suggestedTaskID()`でLLMが一覧に無いidを返した場合の防御的検証も実施）、クローズ要求一覧の
+  `<select>`の初期選択肢として使う（`internal/web/kanban.go`・
+  `internal/web/templates/board.html.tmpl`）。
+- 特別な「(AI推定)」ラベル等は付けず、人間が選んだ場合と見た目上の区別はしない方針とした
+  （ユーザー回答「特に書かなくていい」）。承認操作自体は引き続き人間が行い、
+  `docs/adr/complete/auto-close-policy.md`の「自動クローズしない」方針は維持している。
+- `sqlc generate`→`go build`→`go vet`で確認、さらに一時的なGoテストで実機のllama-swapに
+  対して`Classify`を呼び出し、`related_task_id`が未クローズタスク一覧の中から正しく
+  推定されることを確認した（確認後にテストは削除、既存の検証パターンを踏襲）。
+
+### 学んだこと
+
+- 「AIで判断して」という一見シンプルな要望も、grillingで深掘りすると「いつ推定するか
+  （抽出時 vs 承認画面表示時）」「LLM呼び出しか軽量ヒューリスティックか」「誤クローズ対策
+  としてのUI表現」等、複数の独立した設計判断を含んでいた。既存のextractorパイプライン
+  （スレッド単位で1回LLM呼び出し）に相乗りできる設計（抽出時にまとめて推定）を選んだことで、
+  画面表示のたびに追加コストが発生しない実装にできた。
+
+---
+
+## 2026-09-13 / Mattermost extractorの孤立メッセージ不具合を修正（トランザクション化）
+
+### やったこと
+
+- 本番投入後、ユーザーから「特定の投稿がタスク候補一覧に出てこない」との報告があり調査した。
+  実DB（`/docker/task-dashboard/data/task_dashboard.db`）を一時的な読み取り専用sqlite3
+  コンテナ（`keinos/sqlite3`）で確認したところ、`messages`テーブルにid=17として投稿は
+  保存されているが、対応する`candidates`レコードが存在しない「孤立レコード」だった。
+  `docker logs`にはこの投稿に関するエラーは一切出ておらず、`received_at`が現在のコンテナ
+  起動時刻より前だったことから、本番投入前にホスト上で直接バイナリを動かして検証していた
+  際（24時間分のバックログ処理に5分以上かかり、完了を待たずにkillした回）に、
+  `registerCandidate`内の`InsertMessage`成功後・`InsertCandidate`実行前後でプロセスが
+  中断され孤立したものと特定した。
+- 原因: `internal/mattermost/collector.go`の`registerCandidate`が
+  `InsertMessage`→`InsertCandidate`→(自動登録時)`CreateTask`を別々のクエリとして順に
+  実行しており、原子性が無かった。さらに`MessageExistsBySourceID`による重複防止チェックが
+  あるため、一度孤立したメッセージは再ポーリングされても「既存」と判定され、永久に
+  候補化されないことも判明した。
+- 対応: ユーザーに2案（1: この1件だけ手動救済／2: 恒久対応としてトランザクション化）を
+  提示し、「2」（恒久対応）を選択された。`registerCandidate`に`db *sql.DB`を渡すよう
+  `StartCollectorLoop`→`runOnce`→`collectChannel`の各シグネチャを変更し、
+  `InsertMessage`・`InsertCandidate`・`CreateTask`を`db.BeginTx`+`q.WithTx(tx)`で
+  1トランザクションにまとめた（`internal/taskstore/seed.go`の`Seed`関数と同じ既存パターンを
+  踏襲）。パーマリンク解決（HTTP呼び出し）と重複確認はトランザクション外のまま維持した。
+- `sqlc generate`→`go build`→`go vet`で確認済み（エラーなし）。
+
+### 学んだこと
+
+- 複数のDB書き込みを含む処理は、検証目的の一時的な直接実行であっても、中断（kill）される
+  前提で原子性を最初から考慮すべきだった。「まずcollectorのみ実装→後でextractorへ拡張」
+  という段階的な進め方自体は妥当だったが、拡張時に`InsertMessage`+`InsertCandidate`を
+  分けて実装した際、失敗時の一貫性まで検討できていなかった。
+- 孤立レコードが発生すると、重複防止チェック（`MessageExistsBySourceID`）が「安全装置」
+  ではなく「一度失敗すると永久に再試行されなくなる罠」として働いてしまう点は、実データで
+  実際に踏むまで気づけなかった。冪等性のためのチェックを入れる際は、「途中失敗からの
+  リカバリ経路」も併せて設計する必要がある。
+
+### 未解決事項
+
+- 実データで発見した孤立メッセージ（message.id=17、本文「@sample タスク一覧の画面を
+  作成しておいて」、project_hint=jira_b、channel=mj1wkdmed3yrfb4d8hetiexkko）自体の
+  手動救済はまだ未対応。ユーザーに確認予定（候補として救済するか、タスクとして直接
+  登録するか）。
+
+---
+
+## 2026-09-13 / Mattermost extractor（ローカルLLMによる取得時タスク化）を実装
+
+### やったこと
+
+- 直前に実装したMattermost collector（収集のみ）を実際に稼働させたところ、ユーザーから
+  「メッセージを全部保存するだけでは意味がない。AIを叩いて取得時にタスク化すべき」との
+  指摘があった。grillingスキルで前提を深掘りし、ADR4本
+  （`docs/adr/complete/mattermost-extractor-llm-choice.md`・`mattermost-extractor-registration-flow.md`・
+  `mattermost-extractor-batching.md`・`mattermost-message-retention.md`）として設計を確定した。
+- **AI選定**: Claude APIではなく、このホストに既に稼働していたローカルLLM基盤
+  （`/work/docker/llama-swap/`、OpenAI互換API）を使うことになった。調査の結果、llama-swapは
+  `response_format: json_object`での構造化出力に対応していること、Mattermost APIのスレッド
+  取得エンドポイント（`GET /api/v4/posts/{postID}/thread`）が既存の`postList`/`Post`型を
+  そのまま流用できることを事前に実機確認してから実装した。
+- **登録フロー**: `kind=task`かつ`target`確定なら自動的に`tasks`へ登録
+  （`candidates.human_verdict='auto_registered'`）。`target`不明な`kind=task`候補向けに、
+  既存の「クローズ要求一覧」と対称的な「タスク候補一覧」画面を新設した（クエリ・ビュー
+  モデル・ハンドラ・テンプレート・JSをすべて1:1でミラーリング）。
+- **バッチ化**: 新着メッセージをスレッド単位でグループ化し、同一スレッド内の複数新着は
+  まとめて1回のLLM呼び出しで分類する設計にした（ユーザーから「同じスレッドに新規投稿が
+  複数あればまとめてほしい」との要望を受けて、当初提案した「1メッセージ1呼び出し」から
+  修正）。
+- **保存方針の転換**: タスク化・候補化されなかった投稿は保持しない方針に変更（Mattermost
+  collector実装時に決めた「messagesテーブルのMAX(received_at)をカーソルにする」設計が
+  成立しなくなるため、チャンネルごとの処理位置を保持する新テーブル
+  `mattermost_channel_state`に切り替えた）。候補化された投稿には新規`messages.permalink_url`
+  列でMattermostパーマリンクも保存し、既存の「元発言」表示（`source_message_id`経由のJOIN）
+  をそのまま流用してURL・本文を確認できるようにした（新しい`description`欄の細工は不要）。
+- 実装中、**初回起動時の処理がHTTPサーバーの起動をブロックする**という設計バグを実機テストで
+  発見した。24時間分の初回キャッチアップ＋実際のスレッド数×ローカルLLMの逐次呼び出しは
+  数分かかりうるため、`StartCollectorLoop`の初回実行を同期実行からgoroutine内の非同期実行に
+  修正した（`taskstore.StartRolloverLoop`は軽量なDB更新のみなので同期のままでよいが、
+  extractorは同じパターンを踏襲すべきではなかった）。
+
+### 検証したこと
+
+- `sqlc generate`→`go build`→`go vet`が通ることを確認。
+- ローカルLLMのJSON構造化出力対応を実機（`curl .../v1/chat/completions`）で事前確認してから
+  プロンプト設計を行った。
+- 実際にアプリを起動し、実際のMattermostチャンネル・実際のローカルLLMに接続して動作することを
+  確認した（実データの取得・スレッド取得・LLM分類呼び出しが正しく実行されることをログで確認。
+  ただし実チャンネルの24時間分バックログの分類完了は、逐次LLM呼び出しのため数分〜それ以上
+  かかることが判明し、完了まで待ちきるのは今回のセッションでは行わなかった）。
+- 修正後は、上記の非同期化によりHTTPサーバーがブロックされず即座に起動することを確認した。
+- 本番のdocker composeコンテナも再ビルド・再起動し、実際にホスト側のローカルLLMへ到達
+  できること（`extra_hosts: host.docker.internal:host-gateway`経由）を確認した。
+
+### 学んだこと・注意点
+
+- **ユーザーの環境変数（ホスト側の`~/.bashrc`）の中身を、値を伏せずに`grep -n`で表示して
+  しまい、Bot Tokenを会話ログに露出させる事故を起こした。** ユーザーは事前に「トークンは
+  共有しない」と明言していたにもかかわらず、動作確認のための`grep`コマンドで値まで出力
+  してしまった。ユーザーはトークンをローテーションする対応が必要になった。再発防止として
+  `~/.claude/CLAUDE.md`（ユーザー全体のルール、プロジェクト横断で有効）に
+  「シークレットを含みうるファイル/コマンドは値を伏せた方法でのみ確認する」というルールを
+  追加した（プロジェクト単位の自動メモリではなく、ユーザー全体に効く場所に置く方が適切と
+  ユーザーからも指摘があった）。
+- 既存の「常駐goroutineの初回実行は同期でもよい」というパターン（週次ロールオーバー）を
+  そのまま新機能に踏襲すると、処理内容の性質（軽量なDB更新 vs 外部LLM呼び出しを含む
+  逐次処理）によっては起動をブロックする重大な問題になりうる。パターンを流用する際は
+  「そのパターンが妥当だった理由（今回なら“軽量だから同期でも問題ない”）」が新しい状況でも
+  成り立つかを都度確認する必要がある。今回は実機起動テストで気づけたが、レビューの時点で
+  気づければより良かった。
+- Docker Composeの`network_mode: host`で動くサービス（今回のllama-swap）へ、通常のbridge
+  ネットワークのコンテナから到達するには`extra_hosts: ["host.docker.internal:host-gateway"]`
+  が必要（Linux）。ブリッジゲートウェイIP（`docker inspect`で確認できる`Gateway`）へ直接
+  到達できることも確認したが、ネットワーク再作成で変わりうるため、標準的な
+  `host.docker.internal`方式を採用した。
+
+---
+
+## 2026-09-13 / Cycles・優先度・Mattermost collector実装の設計書反映漏れを一斉点検
+
+### やったこと
+
+- ユーザーから「ここまでの内容を設計書に落として。今実装されている内容で反映されていない
+  ものはすべて落として」との依頼を受け、直近のCycles/優先度/Mattermost collector/
+  docker-compose環境変数の4回の実装で発生していた設計書への反映漏れを棚卸しした。
+  各機能実装時にその都度ドキュメントを更新してきたが、以下の箇所が古い記述のまま
+  取り残されていた。
+  - **`README.md`**: 3機能すべて未反映のまま放置されていた（「外部通信は一切行わない」、
+    ディレクトリ構成に`internal/mattermost/`・`rollover.go`が無い、Mattermost環境変数の
+    説明が無い、等）。全面的に更新した。
+  - **`docs/design/screen-board.md`**: 「モーダル（2種）」節が「構成・項目はFlask版から
+    変更していない」のままで、週の所属表示（Cycles）・優先度selectの追加が未反映。
+    「カード」節・ルート一覧のnew/edit概要も同様に未反映だった。
+  - **`docs/design/screen-close-requests.md`**: 「collector/extractor未実装のため」という
+    記述が、Mattermost collector実装後は部分的に不正確になっていた（extractorのみ未実装、
+    collectorはMattermost分のみ実装済み）。
+  - **`docs/design/design.md`・`docs/design/task-management-automation.md`・`CLAUDE.md`**:
+    「まだ未実装のcollector/extractor/syncer/registrar/digest」という一括りの表現が
+    複数箇所に残っており、Mattermost collector実装後の実態（extractor/syncer/registrar/
+    digestのみ未実装）と食い違っていた。
+  - `compose/docker-compose.yml`冒頭コメントの「外部通信なし」「/workメインリポジトリの
+    docs/adr/proposals/task-management-automation.md参照」も、リポジトリ独立化・
+    Mattermost collector追加で古くなっていたため修正した。
+- ADR（`docs/adr/complete/`配下）は意思決定の経緯を残す追記オンリーの記録のため、
+  今回の点検では書き換えず現状のまま維持した（`dashboard-tech.md`の「自動化パイプラインは
+  Python想定」という記述も、決定当時の前提の記録として残している。その後の実態変化は
+  `mattermost-collector-language.md`という別のADRで扱っている）。
+
+### 学んだこと・注意点
+
+- 機能実装のたびに関連ドキュメントを更新してはいたが、**「その機能に直接関係する節」だけを
+  見て、リポジトリ全体のドキュメント（特にREADME.md）への波及を見落とす**、という抜けが
+  複数回（Cycles・優先度・Mattermost collectorそれぞれ）発生していた。特にREADME.mdは
+  一度も更新対象に入れておらず、3機能分すべてが未反映のまま蓄積していた。
+- 今後、機能実装のドキュメント更新時は「その機能の専用セクションを追記する」だけでなく、
+  `grep -rn "<変更前の表現>"`でリポジトリ全体（README.mdも含めて）を横断的に検索し、
+  同じ主張が他のファイルに重複していないか確認する一手間を、都度のコミット前チェックの
+  一部として組み込むとよい。
+- 「ここまでの内容を設計書に落として」のような包括的な依頼を受けた際は、個別ファイルの
+  差分だけでなく、プロジェクト全体のドキュメント（README.md含む）を横断的に読み直す
+  棚卸し作業として扱うべきだと分かった。
+
+---
+
+## 2026-09-13 / Mattermost認証情報をホスト環境変数から引き継ぐcompose設定
+
+### やったこと
+
+- ユーザーから「トークンはどこに設定すればいいか。ホストPCの環境設定を引き継いでほしい」
+  という要望を受け、`compose/docker-compose.yml`の`environment:`に
+  `MATTERMOST_BOT_TOKEN`/`MATTERMOST_SERVER_URL`/`MATTERMOST_CHANNEL_ROUTES`を
+  Docker Composeの変数展開構文（`${VAR:-}`）で追加した。実際のトークン値はリポジトリの
+  どこにも書かず、ホスト側のシェル環境変数、または`compose/.env`（新規`.gitignore`対象）の
+  どちらかから引き継ぐ運用にした。
+- `.gitignore`に`.env`/`compose/.env`を追加。`docs/design/design.md`の環境変数節に
+  運用方法（ホスト環境変数 or `compose/.env`）を追記。
+- 併せて`compose/docker-compose.yml`冒頭コメントの古い記述（「外部通信なし」「/work
+  メインリポジトリのdocs/adr/proposals/task-management-automation.md参照」、いずれも
+  Mattermost collector追加・リポジトリ独立化で既に不正確になっていた）を修正した。
+
+### 検証したこと
+
+- 環境変数未設定時に`docker compose config`で`MATTERMOST_BOT_TOKEN`等が空文字として
+  エラーなく展開されることを確認。
+- ホスト側でダミー値（実トークンではない）を`export`した状態で`docker compose config`を
+  実行し、コンテナの`environment`へ正しく反映されることを確認。
+- 環境変数を`unset`した通常状態で`docker compose up -d`し、`localhost:8090`が従来通り
+  起動しMattermost collectorがスキップされることをログで確認。
+
+### 学んだこと・注意点
+
+- 本来は依頼を受けた時点で`task-add`スキルでの起票が必要だったが（CLAUDE.mdの
+  「ユーザーからその場で直接依頼されたタスクも例外なくここに書く」ルール）、小さな
+  追加質問への対応として直接着手してしまい、起票を省略した。次回以降、どれだけ小さく
+  見える依頼でも着手前に必ず起票する。
+
+---
+
+## 2026-09-13 / 優先度フィールド追加 + Mattermost collector（収集のみ）を実装
+
+### やったこと
+
+- Cyclesに続き、ユーザーから「優先度」「Mattermost連携機能」の要望を受け、grillingスキールで
+  前提を深掘りした。優先度は小さめの検討で済んだが、Mattermost連携は
+  「外部通信は一切行わない」という本リポジトリの核となる方針を実際に破る決定だったため、
+  スコープ（収集のみ vs フルパイプライン）・実装言語（Go vs Python）を特に慎重に確認した。
+  ADR4本（`docs/adr/complete/task-priority-field.md`・`mattermost-collector-scope.md`・
+  `mattermost-collector-language.md`、既存の`collection-trigger.md`も今回の実装で使うため
+  `complete/`へ移動）として記録。
+- **優先度フィールド**: `tasks.priority`(highest/high/medium/low、デフォルトmedium)を追加。
+  既存の`due_date`/`cycle_start_date`追加と同じ`columnExists`+`ALTER TABLE`マイグレーション
+  パターンを踏襲。カード上に色分けバッジ表示のみ（並び順・レーン構造には影響しない）、
+  編集・新規作成モーダルで変更可能。
+- **Mattermost collector（収集のみ）**: 新規パッケージ`internal/mattermost/`を追加。
+  Mattermost公式Go SDK(`server/public/model`)は使わず、`net/http`のみの最小限のRESTクライアント
+  （`GET /api/v4/channels/{id}/posts?since=...`・`GET /api/v4/users/{id}`）を実装。
+  `rollover.go`と同じ「常駐goroutine+time.Ticker」パターンで10分間隔ポーリングし、
+  既存の`messages`テーブルへ保存する。cursor（前回取得位置）は新規テーブルを作らず
+  `messages`テーブル自体の最新`received_at`から算出、重複防止は`source`+`source_id`の
+  存在チェックで行う。`MATTERMOST_BOT_TOKEN`未設定時は起動をスキップし既存のseed動作に
+  影響しない。認証情報はユーザーが自分の環境で設定し、このセッションには一切共有されていない。
+- ユーザーからの指摘（「Anthropic SDKはGoにもあるのでは？」）を受けて、当初「抽出(extractor)で
+  Python(`anthropic` SDK)が必要」という判断が誤りだったことを訂正した
+  （`github.com/anthropics/anthropic-sdk-go`という公式Go SDKが存在する）。将来extractorを
+  追加する際もGoで完結できる見込みとなり、`docs/design/task-management-automation.md`の
+  技術スタック節にその旨を追記した。
+- `docs/design/data-model.md`・`screen-board.md`・`design.md`・`task-management-automation.md`・
+  `CLAUDE.md`（「外部通信は一切行わない」→「原則行わない、Mattermostのみ例外」に訂正）を
+  実装内容に合わせて更新。
+
+### 検証したこと
+
+- `sqlc generate`→`go build`→`go vet`が通ることを確認。
+- 優先度: アプリを起動しcurlでボードHTMLを取得、カードの`data-priority`属性・バッジ表示・
+  編集モーダルでの`priority=highest`への更新が反映されることを確認。
+- Mattermost collector: `MATTERMOST_BOT_TOKEN`未設定でアプリを起動し、collectorがスキップされ
+  既存のseed起動に一切影響しないことをログで確認。`parseChannelRoutes`/`LoadConfigFromEnv`は
+  一時的なGoテスト（検証後に削除、Cyclesの`rollover_verify_test.go`と同じ進め方）で検証。
+  実際にMattermostサーバーへ接続する部分は、ユーザーが認証情報を共有しない方針のため
+  このセッションでは検証できていない（ユーザー自身の環境での動作確認が必要）。
+
+### 学んだこと・注意点
+
+- 技術的な実装詳細（どの言語で書くべきか等）についてはgrillingの中でもユーザーに聞かず、
+  自分で事実を調べて回答すべき（今回はMattermost公式Go SDKの存在をWebSearchで確認してから
+  回答した）。一度誤った前提（Python=Anthropic SDKのため必須）で回答してしまった際は、
+  ユーザーからの指摘を受けて訂正することを厭わず、関連ドキュメントまで含めて速やかに
+  正しい情報に更新する方が良い。
+- 「外部通信は一切行わない」のような、プロジェクトの複数箇所（CLAUDE.md・design.md・
+  ADR等）に散らばって明記された核となる方針を変更する場合、grep等で参照箇所を洗い出して
+  すべて更新しないと、ドキュメント間で矛盾した記述が残る。今回は`CLAUDE.md`冒頭・
+  `design.md`の位置づけ・`task-management-automation.md`の位置づけの3箇所で同じ主張が
+  繰り返されており、すべて訂正が必要だった。
+- Dockerでsqlite3 CLIを使った検証で権限エラーが再発しなかった（今回はGoの一時テストのみで
+  検証を完結させたため）。DBの中身を直接確認したい場面では、最初からアプリと同じドライバを
+  使うGoの一時テスト方式を使う方針を継続する。
+
+---
+
+## 2026-09-13 / Linear風Cycles機能（週次の今週/バックログ区分）を追加
+
+### やったこと
+
+- ユーザーからLinearの「Cycles」機能を参考にしたいとの相談を受け、まずLinear自体の機能調査
+  （Web検索）を行った後、grillingスキルで「taskmanagerにどう取り込むか」を深掘りした
+  （目的・対象範囲・UI構造・繰り越し方式など計14問のQ&A）。確定要件はADR3本
+  （`docs/adr/proposals/cycle-data-model.md`・`cycle-rollover-execution.md`・
+  `board-dnd-two-axis.md`）として記録。
+- プランモードでExplore/Planサブエージェントを使い既存コード（schema.sql/query.sql/
+  kanban.go/handlers.go/board.html.tmpl/board.js/main.go）を調査した上で実装計画を確定し、
+  承認を得てから実装した。
+- 実装内容:
+  - `tasks.cycle_start_date`(nullable、所属週の月曜日)列を追加。Cycleは独立テーブルに
+    せず、この1列のみで表現（履歴参照は要件外のため）。
+  - `internal/taskstore/rollover.go`を新規作成。`CurrentWeekMonday()`でJST月曜始まりの
+    週を計算し、`RunRollover()`が未完了タスクの`cycle_start_date`を現在週へ一括更新。
+    `StartRolloverLoop()`が15分間隔のtickerで常駐goroutineとして実行（本アプリ初の
+    常駐処理）。`main.go`で起動時にも1回同期実行し、サーバー停止中の週跨ぎを補完。
+  - `internal/web/kanban.go`に`Lanes`(`this_week`/`backlog`)・`laneForCard()`・
+    `cycleStartDateForLane()`を追加し、`BoardData.Columns`を`map[string]map[string][]Card`
+    （lane→status→cards）の2軸構造に変更。
+  - `handleMoveTask`が`status`に加え`cycle`も受け取り、新規クエリ`UpdateTaskStatusAndCycle`
+    で両方を同時更新。新規作成(`handleNewTask`)・編集(`handleEditTask`)は変更不要
+    （新規作成は常にバックログ固定、編集は`cycle_start_date`に触れない設計のため）。
+  - `board.html.tmpl`をスイムレーン行×ステータス列の2重ループに変更。
+  - `board.js`のD&D判定を、既存の「x座標のみで列を判定」する1軸ロジックから、
+    「まずY座標でスイムレーン行、次にX座標でステータス列」を判定する2軸ロジックへ拡張
+    （行の当たり判定には`LANE_HIT_MARGIN_PX`で余裕を持たせた）。
+  - `docs/design/data-model.md`・`screen-board.md`・`design.md`・`CLAUDE.md`を更新。
+
+### 検証したこと
+
+- `sqlc generate`→`go build`が通ることを確認。
+- アプリを実際に起動し、`curl`でボードHTMLを取得して2スイムレーン×4ステータス列の
+  グリッド・各カードの`data-cycle`属性が期待通りであることを確認。
+- `/tasks/{id}/move`にstatus+cycleを送信し、DB上で両方が同時に正しく更新されることを確認。
+- ロールオーバー処理は、一時的なGoテスト（`rollover_verify_test.go`、検証後に削除）で
+  「過去週×未完了タスクは今週へ繰り越される」「過去週×完了済みタスクは据え置かれる」の
+  両方を確認した。
+
+### 学んだこと・注意点
+
+- Dockerでsqlite3 CLIを使ってホスト上のSQLiteファイルを直接UPDATEしようとすると、
+  コンテナのユーザー/パーミッションの組み合わせによっては`attempt to write a readonly
+  database`で失敗するケースがあった（`--user`指定あり/なし、ファイルのchmodを変えても
+  解消せず）。原因を深追いする代わりに、アプリと同じ`modernc.org/sqlite`ドライバを使う
+  一時的なGoテストでDBを直接操作する方式に切り替えたところ問題なく検証できた。今後
+  同様にDBの中身を直接検証したい場合は、最初からこの方式（Goの一時テスト）を使う方が早い。
+- 既存の業務ルール文書（特に`CLAUDE.md`の「誤解しやすい業務ルール」）に、今回の変更で
+  事実と異なることになる記述（D&Dがx座標のみで判定、という記述）があり、見落とすと
+  ドキュメントと実装が矛盾する状態になる。機能追加時は関連する既存の「業務ルール」系
+  記述を`grep`等で洗い出し、変更後の挙動に揃えて書き換える必要がある。
+
+---
+
+## 2026-09-13 / task-management-automation.mdの重複記述・リンク切れを解消
+
+### やったこと
+
+- ユーザーから「`docs/design/task-management-automation.md`、他と重複し過ぎでは？」という
+  指摘を受け、design.md/data-model.md/screen-board.md/screen-close-requests.mdおよび
+  ADR各ファイルとの内容突き合わせを行った。以下の実質的な重複・リンク切れを発見・修正した:
+  - 「完了候補提示・クローズ」節が、承認/却下の具体的な業務ルール（`GetTaskByJiraKey`による
+    自動解決、`closeTask()`、`human_verdict`の更新等）を`docs/design/screen-close-requests.md`
+    とほぼ同じ内容で重複記述していた → 本書側は概要のみ残し、詳細への参照に置き換えた。
+  - 「管理画面（ダッシュボード）との関係」節に、「データの実体・同期方針」節と同じ
+    JIRA連携タスクの読み取り/同期の説明が丸ごと再掲されていた → 前節への参照に置き換えた。
+  - 同節の「クローズ要求一覧」パラグラフが、screen-close-requests.mdおよびdesign.mdの
+    「既知の制限」と同じ「collector/extractor未実装のため実データが無くseed.goでのみ動作
+    確認できる」という記述を三重に重複させていた → 短い参照に圧縮した。
+  - 過去のdesign.md分割（画面設計・DB設計をscreen-board.md/screen-close-requests.md/
+    data-model.mdへ切り出した際）で、`docs/adr/complete/`配下の複数ファイル
+    （`delete-vs-hide.md`・`completion-approval-ui.md`・`status-granularity.md`・
+    `personal-task-store.md`）と本書自身が、移設済みのセクション名を含めて
+    `docs/design/design.md`を参照したままになっており、リンク切れ（存在しない見出しへの
+    参照）になっていた。すべて移設先（`screen-board.md`/`screen-close-requests.md`/
+    `data-model.md`）に更新した。
+
+### 学んだこと・注意点
+
+- ファイル分割（design.md → data-model.md/screen-*.md）を行った際、分割元ファイルの内部の
+  参照だけでなく、**分割対象だったファイルを既に参照している他のファイル**（今回は
+  ADR側の「関連する設計ドキュメント」節）も同時に洗い出して更新する必要があった。今回は
+  分割時にADR側の更新まで手が回っておらず、後から指摘を受けて気づいた。今後同様の分割を
+  行う際は、`grep -rn "<分割元ファイル名>"`で移動元ファイルへの全参照を洗い出し、分割で
+  実際にどのセクションがどこへ移ったかとの対応表を作ってから一括更新するとよい。
+- 「概要が詳細を要約する」ことと「概要が詳細をそのまま複製する」ことの境界は曖昧になりやすい。
+  今回は「同じ事実が、ほぼ同じ粒度の文章で複数ファイルに存在するか」を基準に重複と判定した
+  （粒度が異なる要約なら許容、同じ粒度の再掲は重複として片方に寄せる）。
+
+---
+
+## 2026-09-13 / data-model.mdとtask-management-automation.mdのER図重複を解消
+
+### やったこと
+
+- ユーザーから「`docs/design/data-model.md`になぜER図が載っていないのか、
+  `docs/design/task-management-automation.md`と内容が重複しているので正しく振り分けて」
+  という指摘を受けた。確認したところ、両ファイルとも同一のDBスキーマ（`messages`/
+  `candidates`/`tasks`/`user_map`）を別の形式（テーブル一覧 vs mermaid ER図）で
+  説明しており、`task-management-automation.md`側のER図は実装済みスキーマ
+  （`internal/taskstore/schema.sql`）と完全に一致するものだった（「本ERはそれと
+  一致させてある」と明記されていた）ため、正真正銘の重複だった。
+- `docs/design/data-model.md`（DB設計）にER図（mermaid）を移設し、テーブル一覧（役割の
+  概要）とER図（列定義・リレーション詳細）の2段構成にした。スキーマ自体に関する
+  補足（`tasks.jira_key`の意味、`project_routing`がER図に含まれない理由）もこちらへ移した。
+- `docs/design/task-management-automation.md`側のER図・スキーマ補足は削除し、
+  `docs/design/data-model.md`への参照に置き換えた。ただし「まだ実装されていない
+  collector/extractor視点でのデータの使われ方」（`project_hint`をLLMへのコンテキストとして
+  使う、`user_map`未整備時の日次まとめでの確認等）はスキーマ定義そのものではなく
+  pipeline固有の振る舞いのため、こちらに残した。
+
+### 学んだこと・注意点
+
+- 「同じ情報を異なる見た目（テーブル vs 図）で書く」ことと「同じ情報を異なるファイルに
+  重複して書く」ことは別問題。前者は1ファイル内なら概要と詳細の使い分けとして妥当だが、
+  後者は今回のように「片方だけ更新されて食い違う」リスクを生む。ADR分割・design分割の
+  作業直後は特に、「このセクションは本当にこのファイル固有の情報か、他のファイルに
+  同じ情報が無いか」を見出し単位で洗い出す確認が要る。
+
+---
+
+## 2026-09-13 / ADRの「索引ファイル」方式を廃止し、フラットな観点ファイル名に統一
+
+### やったこと
+
+- 直前のセッションで`task-management-automation`のADRを索引ファイル＋論点ファイル
+  （`task-management-automation--a-...`等）に分割していたが、ユーザーから連続して
+  次の指摘を受けた:
+  1. 「索引ファイルは必要か？必要な部分があれば観点を切り出してADRファイルにして」
+     → 索引ファイルの中身を精査したところ、「完了判定は自動クローズしない」という
+     決定事項が論点化されず`背景・現状`に埋もれたまま残っていた。これを新しい論点
+     ファイル（`auto-close-policy.md`）として切り出した。
+  2. 「論点が別れているならまとめる意味もないでしょう」→ 索引ファイル自体
+     （`docs/adr/proposals/task-management-automation.md`）を`git rm`で削除。
+  3. 「読みにくいだけなのでファイル名もaとかbとかtask-management-automationとか
+     つけなくていい」→ 全ファイルを`task-management-automation--{a..g}-*.md`という
+     命名から、内容だけを表す平易な名前（`personal-task-store.md`等）へ
+     `git mv`でリネームした。
+- 最終的なファイル構成: `docs/adr/complete/`に`personal-task-store.md`・
+  `completion-approval-ui.md`・`dashboard-tech.md`・`status-granularity.md`・
+  `delete-vs-hide.md`・`auto-close-policy.md`（実装済み6件）、
+  `docs/adr/proposals/`に`collection-trigger.md`・`data-handling-policy.md`
+  （決定済みだが実装が無い2件）。
+- 各ファイルの冒頭メタ情報は「起票: 2026-09-12 / タスク管理自動化構想の一部
+  （`docs/design/task-management-automation.md` 参照）」という形に統一し、索引ファイルへの
+  参照を削除した。同じ構想に属することの一覧性は、`docs/design/task-management-automation.md`
+  が各所から各論点ファイルへリンクする形で担保する。
+- `docs/design/task-management-automation.md`・`screen-close-requests.md`・
+  `data-model.md`・`design.md`・README.md・CLAUDE.md・`docs/session-context.md`・
+  `docs/adr/README.md`（本リポジトリ、および`/work/docs/adr/README.md`）の参照箇所を
+  すべて新しいファイルパスに更新した。あわせて、旧A〜Gのアルファベット表記に依存していた
+  リンクテキスト（`[論点A]`等）も、内容を表す文言に置き換えた（`completion-approval-ui.md`
+  等ファイル内部のC1/C2/C3のような単一ファイル内の選択肢ラベルはそのまま残した。これは
+  ファイル間の命名規則とは別物のため）。
+- グローバル共有スキル`~/.claude/skills/adr/SKILL.md`を全面改修し、「索引ファイル」の概念を
+  撤廃した。`<slug>`は常に単一の論点を表す平易な名前とし、タスクIDや連番接頭辞は付けない。
+  広い構想の一部であることは各ファイルの起票行に一文で示すのみとし、まとめるための索引は
+  作らない方針に統一した。`docs/adr/README.md`（本リポジトリ、`/work`双方）も同様に修正。
+
+### 学んだこと・注意点
+
+- 「論点ごとに1ファイルへ分割する」という要望を実現する際、安易に「索引ファイル」という
+  レイヤーを追加すると、論点ファイルが自己完結していればいるほど索引の存在価値が薄れ、
+  むしろ二重管理・リンク切れの温床になる。ユーザーからの指摘の通り、分割後に「まとめる
+  ファイル」が本当に必要かどうかは都度疑うべきだった。
+- ファイル命名規則を変更する（索引方式の導入、その後の全面撤廃）ような可逆性の低い意思決定は、
+  一度で確定させようとせず、実際に手を動かしてユーザーに見せながら早めにフィードバックを
+  得るとよい。今回は同一セッション内で3段階の指摘を受けて都度手戻りが発生したが、
+  「索引ファイルを作る」という最初の設計判断自体をもっと慎重に（他の選択肢と比較して）
+  検討していれば、手戻りを減らせた可能性がある。
+- ファイル名からタスクIDやアルファベット接頭辞を除去する場合、ファイル名だけでなく
+  Markdownリンクの**表示テキスト**（`[論点A]`のような）にも同じ接頭辞が embedded
+  されていないか確認する必要がある。`grep -rn "論点[A-Z]"`のような広めのパターンで
+  横断的に洗い出すと漏れが減る。
+
+---
+
+## 2026-09-13 / ADR論点のうち実装完了分をdocs/adr/complete/へ移動
+
+### やったこと
+
+- ユーザーから「ADRのうち、実装まで完了したものはcompleteに入れて」という依頼を受けた。
+  `task-management-automation`索引配下の論点A〜Gはいずれも採用/決定は済んでいたが、
+  「意思決定が済んでいるか」ではなく「対応する実装が実際に完了しているか」を基準に
+  判定した:
+  - 論点A（個人タスク格納先、A2）: `tasks`テーブル（`jira_key`がNULLの行）として実装済み → 移動。
+  - 論点C（完了候補承認UI、C3）: 「クローズ要求一覧」画面として実装済み → 移動。
+  - 論点D（ダッシュボード実装技術、D2）: パイロット全体がGo+sqlc+htmxで実装済み → 移動。
+  - 論点E（status粒度、E2）・論点F（削除vs非表示、F2）: いずれもパイロット実装に反映済み → 移動。
+  - 論点B（収集トリガー、B1）・論点G（情報取り扱い方針、G1）: 決定はしているが、対応する
+    collector/extractorが未実装のため実装物が無い → `docs/adr/proposals/`に残置。
+- `git mv`で5ファイル（`task-management-automation--{a,c,d,e,f}-*.md`）を
+  `docs/adr/proposals/`から`docs/adr/complete/`へ移動。
+- 索引ファイル（`docs/adr/proposals/task-management-automation.md`）の論点一覧テーブル・
+  冒頭の状態行・本文中のリンクを、移動後のパス（`../complete/...`）と実装状況の注記
+  （実装済み/未実装）に合わせて更新した。
+- `docs/design/task-management-automation.md`・`docs/design/screen-close-requests.md`
+  内の該当ファイルへのリンク（`[論点A](../adr/proposals/...)`等）も、移動先
+  （`../adr/complete/...`）に追従させた。`grep`で`proposals/`配下への古いリンクが
+  残っていないことを確認した。
+
+### 学んだこと・注意点
+
+- ADRスキルの`complete`は本来「意思決定が決着したか」を基準にしているが、今回ユーザーは
+  それとは異なる「実装まで終わっているか」という基準を明示的に指定した。同じ`complete`
+  という操作でも、呼び出しごとに判定基準が変わりうるため、機械的にスキルのデフォルト基準
+  だけで判断せず、その場の指示を優先する必要がある。
+- 論点ファイルを`proposals/`→`complete/`へ移動すると、他の設計ドキュメントからの相対パス
+  リンクが壊れる。移動前に`grep -rn`で参照元を洗い出し、移動後にリンク切れが無いことを
+  確認する、という手順が有効だった。
+
+---
+
+## 2026-09-13 / docs/design/design.mdをDB設計・画面設計・全体方針設計に分割
+
+### やったこと
+
+- ユーザーから「DB設計、画面設計（画面ごと）、全体方針設計に分けてファイルを分けて」という
+  依頼を受けた。複数ファイルへの再構成のためプランモードで方針を確認してから実施した。
+- ADR分割時と同じ考え方（既存の参照パスは変えない）を踏襲し、`docs/design/design.md`は
+  パスを維持したまま中身を「全体方針設計」（位置づけ・技術スタック・デプロイ構成・
+  ルート一覧の索引・既知の制限）に絞った。
+- 新設: `docs/design/data-model.md`（DB設計、テーブル定義・マイグレーション）、
+  `docs/design/screen-board.md`（画面設計: カンバンボード画面。レーン/フィルタ/カード/
+  編集・新規作成モーダル/D&D/「非表示」の業務ルール）、
+  `docs/design/screen-close-requests.md`（画面設計: クローズ要求一覧画面。承認/却下の
+  業務ルール）。タスク編集・新規作成モーダルはボード画面と不可分なため
+  `screen-board.md`にまとめ、独立したボタン・モーダル・ルートを持つクローズ要求一覧は
+  別ファイルに分けた。
+- `design.md`のルート一覧テーブルは索引として残し、各ルートの詳細な業務ルールは対応する
+  画面ファイル側にのみ書く形にして重複を無くした。
+- README.md・CLAUDE.md・docs/session-context.mdの参照箇所を、新ファイルへのリンクを
+  含む形に更新した（`docs/design/design.md`自体への既存参照はパス不変のため書き換え不要）。
+- 途中、ユーザーから動作確認のためのアプリ起動を依頼された。最初host上で直接バイナリを
+  実行したところ「Dockerで動かして」と指摘され、次に`docker run`で手動起動したところ
+  「Dockerfileとかcomposeとかに設定を入れてよ」と指摘されたため、最終的に
+  `docker compose -f compose/docker-compose.yml up -d --build`でプロジェクト所定の
+  compose定義通りに起動した。`/docker/task-dashboard/data`に前回セッションの古いDB
+  （seed.go変更前のデータ、クローズ要求候補なし）が残っていたため、一時コンテナ
+  （`docker run --rm -v ... alpine rm`）でDBファイルのみ削除し、再起動でauto-seedが
+  効くようにした（root所有でmvが使えなかったため）。
+
+### 学んだこと・注意点
+
+- 動作確認の「動かして」という依頼は、環境によって期待するものが違う
+  （ホスト直接実行／`docker run`手動／プロジェクトの`docker compose`定義通り、の3通り）。
+  今回は指示を受けるたびに一段階ずつ正しい方法に近づいた形になったが、最初から
+  「このリポジトリの正式なDocker運用方法（`docker compose -f compose/docker-compose.yml
+  up -d --build`）」を使うべきだった。次回、既にcompose定義があるリポジトリで動作確認を
+  頼まれたときは、まずそちらを使う。
+- `TASK_DASHBOARD_AUTO_SEED=1`はDBが空の場合のみ有効なため、既存のボリューム
+  （`/docker/task-dashboard/data`）に前回データが残っていると、コード変更後の新しい
+  サンプルデータが反映されない。distroless実行イメージにはシェルが無くコンテナ内から
+  直接削除できないため、別の一時コンテナ（busybox系イメージ）で同じボリュームをマウントして
+  ファイル操作する、という回避策が有効だった。
+
+### 未解決事項
+
+- `/docker/task-dashboard/data`配下は今回のセッションでroot所有のまま運用しており、
+  ホスト側（非root）から直接編集・削除ができない状態が続いている。今後同様の作業が
+  頻発するようであれば、パーミッションの見直しをユーザーに相談してもよいかもしれない。
+
+---
+
+## 2026-09-13 / 「クローズ要求一覧」画面を実装（ADR論点C3）
+
+### やったこと
+
+- ユーザーから「その画面を作って」という依頼（直前にADR論点CをC3採用へ訂正した流れ）を受け、
+  影響範囲が複数ファイルにまたがる新機能のためプランモードで方針を確認してから実装した。
+- `internal/taskstore/query.sql`に`ListPendingCompletionCandidates`
+  （`candidates.kind='completion' AND human_verdict未設定`を`messages`とJOINして取得）・
+  `GetCandidate`・`UpdateCandidateVerdict`・`GetTaskByJiraKey`・`ListOpenTasksByTarget`を追加。
+- `internal/taskstore/seed.go`に承認待ちの完了報告候補を2件追加した（1件は
+  `related_jira_key="PROJA-101"`で対象タスクが一意に決まるケース、1件は`target=personal`で
+  `related_jira_key`が無く、画面上で対象タスクを選ぶケース）。
+- `internal/web/kanban.go`に`CloseRequest`/`OpenTaskOption`ビューモデル、
+  `LoadCloseRequests()`（`related_jira_key`が無い候補には`ListOpenTasksByTarget`で選択肢を
+  付加）、`closeTask()`（既存の`closedAtForTransition`・`stubJiraTransition`を再利用する
+  クローズ処理の共通化）を追加し、`BoardData`に`CloseRequests`を追加した。
+- `internal/web/handlers.go`に`POST /candidates/{id}/approve`・
+  `POST /candidates/{id}/reject`を追加。承認は`related_jira_key`があれば自動解決、
+  無ければフォームの`task_id`（`<select>`でユーザーが選択）を使う。
+- `internal/web/templates/board.html.tmpl`にツールバーの「クローズ要求」ボタン（件数バッジ）・
+  `close-requests-modal`・一覧表示テンプレートを追加。一覧本体（`close-requests-container`）
+  と件数バッジ（`close-requests-count`）は、既存のトーストと同じ`hx-swap-oob="true"`パターンで
+  ボード操作のたびに再描画するようにした（モーダル自体は`#board`外の静的要素なので、承認/却下
+  後も開いたままになり複数件を続けて処理できる）。
+- `static/board.js`にモーダルの開閉処理（新規タスクモーダルと同じパターン）を追加。
+- 動作確認: Docker経由で`sqlc generate`→`go build`が通ることを確認した後、ローカルで
+  サーバーを起動しブラウザ（claude-in-chrome）で一連の操作を確認した。
+  - `related_jira_key`ありの候補を承認 → 対象タスク（API仕様書をまとめる/PROJA-101）が
+    完了レーンへ移動、トースト表示、一覧から消え、バッジが2→1に更新されることを確認。
+  - `related_jira_key`なしの候補で`<select>`から対象タスク（個人: 経費精算）を選び承認
+    → そのタスクが完了することを確認（ネイティブ`<select>`はcomputerツールのキー操作では
+    選択できなかったため、javascript_toolで`value`をセットし`change`イベントを発火させて
+    選択した）。
+  - モーダルが承認後も開いたままであること、背景クリックで閉じられること、既存の編集
+    モーダル等が影響を受けていないことを確認。
+  - 検証後、生成物（`sqlc generate`の出力3ファイル・`.build/`）と一時DBは削除済み
+    （コミットしない方針を維持）。
+- ドキュメント更新: `docs/design/design.md`にルート一覧2行・「クローズ要求一覧」の業務ルール
+  節・「既知の制限」の実態修正を追加。`docs/design/task-management-automation.md`と
+  ADR論点Cファイルの「まだ実装していない」という記述を実装済みに更新。CLAUDE.mdの
+  「誤解しやすい業務ルール」に、対象タスク未確定時は人間が画面上で選ぶ点を追記。
+
+### 学んだこと・注意点
+
+- ネイティブ`<select>`要素はブラウザ拡張のcomputerツール（クリック+矢印キー）では選択操作が
+  反映されないことがあった。`javascript_tool`で`element.value`をセットし`change`イベントを
+  発火させる方法で確実にテストできた。
+- `candidates`のような「将来のパイプライン用に用意されていたが実データが無いテーブル」に
+  UIを先行実装する場合、`seed.go`にデモ用データを追加しないと機能の動作確認自体ができない
+  （既存の`tasks`同様、パイロット全体が「実装が先、実データ投入は後」という順序で育っている）。
+
+---
+
+## 2026-09-13 / ADR論点C: C2「検討中」表記の誤りを修正しC3採用として確定
+
+### やったこと
+
+- 直前のセッションで、ユーザーが「Mattermostを経由するより、今のWEBアプリにクローズ要求
+  一覧を作成し…」と提案した際、これを「まだ採用可否未定の追加案（検討中）」として
+  `task-management-automation--c-completion-approval-ui.md`に記録していたが、ユーザーから
+  「私はC3にしろと言ったと思うんだけど」と指摘を受けた。提案ではなく採用指示だったと判断し、
+  以下を修正した。
+- 論点Cファイル: C2を「不採用（2026-09-12採用→2026-09-13にC3へ変更）」、C3を「採用
+  （2026-09-13）」に変更。「採用理由/検討経緯」節も「検討中」のトーンから「C2→C3へ変更した
+  理由」の記述に書き換えた。
+- ADR索引ファイル: 冒頭の状態行・論点一覧表・「想定される次の一手」（「論点Cの再検討で結論を
+  出す」という項目を「クローズ要求一覧画面を実装する」という実装タスクに変更）を更新。
+- `docs/design/task-management-automation.md`: C3採用に合わせて設計そのものを更新
+  （C2前提だった「日次まとめ→Mattermost→リアクション承認」の記述・全体パイプライン図を、
+  「クローズ候補はダッシュボードのクローズ要求一覧画面に表示し、ユーザーが任意タイミングで
+  承認する」という設計に書き換え。digestの構成からクローズ候補の項目を削除。管理画面との
+  関係図・技術スタック節等、関連箇所を一通り更新）。
+
+### 学んだこと・注意点
+
+- ユーザーが「〜すると良いと思う」という柔らかい言い回しで発言しても、文脈上は実質的な
+  決定・指示であることがある。今回は「ADRの承認UIですが」という書き出しで既存の採用方針
+  そのものに言及していたため、「新しい代替案の提示」ではなく「既存方針の変更指示」と読むべき
+  だった。ADRのような意思決定記録では、ユーザー発言の言い回しの柔らかさだけで
+  「検討中」に倒さず、文脈（既存の採用済み方針に対する言及かどうか）を踏まえて判断する。
+- ADRの採用結果を変更する際は、対応する`docs/design/`側の設計（パイプライン図・関連節）も
+  同時に書き換えないと、ADRとdesignの内容が食い違ったままになる。役割分担を導入した直後
+  だったため、両方を追随させる意識が特に重要だった。
+
+---
+
 ## 2026-09-13 / CLAUDE.mdに「設計を検討するときはgrillingスキルを使う」ルールを追記
 
 ### やったこと

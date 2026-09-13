@@ -1,6 +1,6 @@
-# 論点: タスクの進捗管理粒度（`tasks.status`）（task-management-automation--e-status-granularity）
+# 論点: タスクの進捗管理粒度（`tasks.status`）
 
-- 起票: 2026-09-12 / 親タスク: `task-management-automation`（docs/adr/proposals/task-management-automation.md 参照）
+- 起票: 2026-09-12 / タスク管理自動化構想の一部（`docs/design/automation-roadmap.md` 参照）
 - 論点: `tasks.status`をどの粒度で持つか（進捗の途中経過を画面上でどこまで区別するか）。
 - 状態: **採用済み（E2、2026-09-12、パイロット実装で確定）**
 
@@ -19,6 +19,6 @@
 
 ## 関連する設計ドキュメント
 
-- `docs/design/design.md`（`internal/web/kanban.go`の`Statuses`/`StatusLabels`、
+- `docs/design/screen-board.md`（`internal/web/kanban.go`の`Statuses`/`StatusLabels`、
   `closedAtForTransition`の実装）
-- `docs/design/task-management-automation.md`（データモデルER図の`tasks.status`）
+- `docs/design/data-model.md`（データモデルER図の`tasks.status`）
