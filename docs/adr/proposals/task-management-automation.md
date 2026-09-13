@@ -7,8 +7,9 @@
   実現する仕組みを設計する（「削除」は[論点F](task-management-automation--f-delete-vs-hide.md)
   の採用により設けない方針）。
 - 種別: 索引（複数論点方式。論点ごとの詳細は下記の個別ファイル参照）
-- 状態: 論点A/B/D/E/F/G採用済み。論点Cは検討中（C2採用済みだがC3案の追加提案があり見直し中）。
-  Zoom収集・JIRA連携（2プロジェクト＋個人タスク）まで含めた実装設計は完了しているが、
+- 状態: 論点A〜G全て決着（A2・B1・C3・D2・E2・F2・G1採用。論点Cは当初C2を採用したが
+  2026-09-13にC3へ変更）。Zoom収集・JIRA連携（2プロジェクト＋個人タスク）まで含めた
+  実装設計は完了しているが、
   「スキーマとダッシュボードUI」部分のみGo + sqlc + htmxでパイロット実装済み
   （`/work/public/taskmanager`リポジトリ）。`collector`/`extractor`/`syncer`/`registrar`/
   `digest`（Mattermost/JIRA/Zoom/Claude APIとの実連携）は未実装のまま。
@@ -29,7 +30,7 @@
 |---|---|---|---|
 | A | 個人タスクの格納先 | 採用済み（A2） | [task-management-automation--a-personal-task-store.md](task-management-automation--a-personal-task-store.md) |
 | B | 収集トリガー方式 | 採用済み（B1） | [task-management-automation--b-collection-trigger.md](task-management-automation--b-collection-trigger.md) |
-| C | 完了候補の承認UI | 検討中（C2採用済み、C3再検討中） | [task-management-automation--c-completion-approval-ui.md](task-management-automation--c-completion-approval-ui.md) |
+| C | 完了候補の承認UI | 採用済み（C3、2026-09-13。C2から変更） | [task-management-automation--c-completion-approval-ui.md](task-management-automation--c-completion-approval-ui.md) |
 | D | ダッシュボードの実装技術 | 採用済み（D2） | [task-management-automation--d-dashboard-tech.md](task-management-automation--d-dashboard-tech.md) |
 | E | タスクの進捗管理粒度（`tasks.status`） | 採用済み（E2） | [task-management-automation--e-status-granularity.md](task-management-automation--e-status-granularity.md) |
 | F | 「追跡除外」操作の範囲（削除 vs 非表示） | 採用済み（F2） | [task-management-automation--f-delete-vs-hide.md](task-management-automation--f-delete-vs-hide.md) |
@@ -49,9 +50,10 @@
    Server-to-Server OAuthアプリ（会議情報・会議要約の読み取りスコープ）。
 2. `project_routing`（監視対象チャンネル/メールフォルダ/Zoom会議シリーズと`project_hint`の対応）
    と`user_map`（主要メンバーの初期データ）を整備する。
-3. collector（mattermost/email/zoom）・extractor・registrar（JIRA登録/個人タスク登録/クローズ
-   実行）・digest（日次まとめ投稿）を実装する（管理画面（ダッシュボード）はスキーマ含め
-   パイロット実装済み。`docs/design/design.md`参照）。
-4. 論点Cの再検討（C2 vs C3、ハイブリッド案）についてユーザーと結論を出す。
+3. collector（mattermost/email/zoom）・extractor・registrar（JIRA登録/個人タスク登録）・
+   digest（新規登録・対象不明タスクの日次まとめ投稿）を実装する（管理画面（ダッシュボード）
+   はスキーマ含めパイロット実装済み。`docs/design/design.md`参照）。
+4. ダッシュボードに「クローズ要求一覧」画面（論点C3の採用結果）を実装する。
+   `docs/design/task-management-automation.md`の「完了候補提示・クローズ」参照。
 5. 運用開始後、precision/recall（登録・クローズ候補それぞれ）を継続的にモニタリングし、
    プロンプト・`project_routing`・confidence閾値を調整する。

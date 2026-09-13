@@ -51,23 +51,30 @@ flowchart TD
     REGJIRA --> DIGEST
     REGTASK --> DIGEST
     PEND --> DIGEST
-    CLOSE1 --> DIGEST
-    CLOSE2 --> DIGEST
 
-    DIGEST["日次まとめ投稿<br/>Mattermost 1メッセージ"] --> APPROVE{"人間が<br/>リアクション承認"}
+    CLOSE1 --> DASH["ダッシュボード<br/>クローズ要求一覧画面<br/>(candidates: kind=completion)"]
+    CLOSE2 --> DASH
+
+    DIGEST["日次まとめ投稿<br/>Mattermost 1メッセージ<br/>(新規登録・対象不明のみ)"]
+
+    DASH --> APPROVE{"人間が<br/>任意タイミングで承認"}
     APPROVE -->|承認| EXEC["JIRA APIクローズ実行 /<br/>個人ストアクローズ"]
-    APPROVE -->|保留| CARRY["翌日に持ち越し"]
+    APPROVE -->|保留| DASH
 ```
 
 - **収集**: 収集源ごとに独立してcronポーリングし、共通の`messages`テーブルへ集約する。
 - **抽出・分類**: `messages`1件ごとにClaude APIで構造化抽出し`candidates`へ格納する。
-- **登録/完了候補提示/実行**: `target`と`kind`に応じて枝分かれし、いずれも最終的に日次まとめ
-  （digest）に集約される。実際にクローズを実行するのは人間がリアクション承認した分のみ。
+- **登録**: `target`と`kind`に応じて枝分かれし、新規登録・対象不明の候補は日次まとめ
+  （digest）に集約される。
+- **完了候補提示/実行**: クローズ候補（`kind=completion`）はMattermostではなく、ダッシュボード
+  の「クローズ要求一覧」画面にDBから随時表示する。実際にクローズを実行するのは、ユーザーが
+  この画面で任意のタイミングで承認した分のみ。
 
-上図のDIGEST〜APPROVE〜EXECの部分は[論点C](../adr/proposals/task-management-automation--c-completion-approval-ui.md)
-で採用したC2（Mattermost日次まとめ＋リアクション承認）の構成。2026-09-13にC3案（ダッシュボード
-内クローズ要求一覧）が提案され見直しを検討中のため、採用可否が確定した際は本図・本書の該当節
-も更新する。
+上図のクローズ候補まわり（CLOSE1/CLOSE2 → ダッシュボード → 承認 → EXEC）は
+[論点C](../adr/proposals/task-management-automation--c-completion-approval-ui.md)で採用した
+C3（ダッシュボード内クローズ要求一覧）の構成。当初はC2（Mattermost日次まとめ＋リアクション
+承認）を採用していたが、2026-09-13にC3へ変更した。日次まとめ（digest）は新規登録・対象不明の
+タスク候補のみを扱い、クローズ候補の承認フローはdigestから切り離されている。
 
 ## データモデル（ER図、SQLite）
 
@@ -225,32 +232,35 @@ due_date/summary`を構造化JSONで抽出する。`target`は`project_hint`が�
    （JIRA APIの検索結果＋自前ストアの`status != done`のタスク）をLLMに渡し、該当しそうな
    ものをconfidence付きで推定させる。
 
-日次で「本日のクローズ候補一覧」を1メッセージにまとめてMattermostへ投稿し
-（[論点C](../adr/proposals/task-management-automation--c-completion-approval-ui.md)のC2）、
-リアクションで承認されたものだけJIRA API／自前ストアでクローズを実行する。対象不明の完了報告
-（related_jira_keyが特定できないもの）はクローズ候補にせず「完了報告はあったが対象タスク不明」
-として別掲し、人間が手動で対応する。
+クローズ候補（`candidates`のうち`kind=completion`かつ`human_verdict`が未設定の行）は、
+ダッシュボードの「クローズ要求一覧」画面に随時蓄積して表示する
+（[論点C](../adr/proposals/task-management-automation--c-completion-approval-ui.md)で採用した
+C3）。ユーザーが任意のタイミングでこの画面を開き、個別またはまとめて承認すると、承認された
+分だけJIRA API／自前ストアでクローズを実行し、`candidates.human_verdict`を`correct`に更新する。
+却下した場合は`false_positive`として記録し、一覧から外す。対象不明の完了報告
+（related_jira_keyが特定できないもの）はクローズ要求一覧には出さず、日次まとめに
+「完了報告はあったが対象タスク不明」として掲載し、人間が手動で対応する。
 
 ## 管理画面（ダッシュボード）との関係
 
-日次まとめ(digest)はMattermostでの通知・承認フロー、ダッシュボードは随時のブラウジング・
-手動操作用途とすみ分ける。
+日次まとめ(digest)は新規登録・対象不明タスクのMattermost通知用、ダッシュボードは随時の
+ブラウジング・手動操作に加えてクローズ候補の承認UI（論点C3）も担う。
 
 ```mermaid
 flowchart LR
-    DASH["管理画面<br/>(Webダッシュボード)"] <--> DB[("tasks / candidates<br/>(SQLite)")]
-    DASH -->|編集/クローズ実行| JIRAAPI["JIRA API"]
+    DASH["管理画面<br/>(Webダッシュボード、<br/>クローズ要求一覧含む)"] <--> DB[("tasks / candidates<br/>(SQLite)")]
+    DASH -->|編集/クローズ実行・承認| JIRAAPI["JIRA API"]
     SYNCER["syncer<br/>(cron定期同期)"] <--> JIRAAPI
     SYNCER -->|title/status等を反映| DB
     COLLECT["collector/extractor/registrar<br/>(cron自動化)"] --> DB
-    DB --> DIGEST["digest（日次まとめ→Mattermost）"]
+    DB --> DIGEST["digest（新規登録・対象不明のみ→Mattermost）"]
 ```
 
 JIRA連携タスクについては、DASHの読み取りは基本ローカルDB（キャッシュ）から行い、正データである
 JIRAとの整合はsyncerが定期的に保つ。DASHからの編集・クローズはJIRA APIへ直接書き込み、成功後に
 ローカルキャッシュへも反映する。
 
-ダッシュボード自体の対象データ・一覧/詳細確認・更新・クローズ・追跡しない/再度追跡する・削除
+ダッシュボード自体の対象データ・一覧/詳細確認・更新・追跡しない/再度追跡する・削除
 （設けない方針）・技術スタックの詳細は、パイロット実装済みの`docs/design/design.md`を参照
 （重複記述しない）。技術スタックの選定は
 [論点D](../adr/proposals/task-management-automation--d-dashboard-tech.md)、
@@ -258,14 +268,19 @@ statusの粒度は[論点E](../adr/proposals/task-management-automation--e-statu
 削除を設けない方針は[論点F](../adr/proposals/task-management-automation--f-delete-vs-hide.md)
 の採用結果。
 
+**クローズ要求一覧（[論点C](../adr/proposals/task-management-automation--c-completion-approval-ui.md)
+のC3で採用、現時点のパイロット実装にはまだ無い）**: `candidates`のうち`kind=completion`かつ
+`human_verdict`が未設定の行を一覧表示し、承認/却下をワンクリックで行える画面をダッシュボードに
+追加する想定。詳細は前節「完了候補提示・クローズ」参照。
+
 ## 日次まとめ（digest）の構成
 
-1メッセージの中で以下をカテゴリ分けして提示する。
+1メッセージの中で以下をカテゴリ分けして提示する。クローズ候補の承認はダッシュボード側
+（論点C3）で行うため、digestには含めない。
 
 1. 新規登録済みタスク（JIRA/個人、当日分）
 2. 対象不明のため保留中のタスク候補（人間の判定待ち）
-3. クローズ候補（承認待ち、リアクションで実行）
-4. 完了報告はあったが対象タスク不明（手動対応が必要）
+3. 完了報告はあったが対象タスク不明（手動対応が必要）
 
 ## リスク・注意点
 
@@ -295,10 +310,12 @@ Python（リポジトリの既存方針どおりルートの`.venv`/uv環境を�
    Server-to-Server OAuthアプリ（会議情報・会議要約の読み取りスコープ）。
 2. `project_routing`（監視対象チャンネル/メールフォルダ/Zoom会議シリーズと`project_hint`の対応）
    と`user_map`（主要メンバーの初期データ）を整備する。
-3. collector（mattermost/email/zoom）・extractor・registrar（JIRA登録/個人タスク登録/クローズ
-   実行）・digest（日次まとめ投稿）を実装する（管理画面（ダッシュボード）はスキーマ含め
-   パイロット実装済み。`docs/design/design.md`参照）。
-4. 運用開始後、precision/recall（登録・クローズ候補それぞれ）を継続的にモニタリングし、
+3. collector（mattermost/email/zoom）・extractor・registrar（JIRA登録/個人タスク登録）・
+   digest（新規登録・対象不明タスクの日次まとめ投稿）を実装する（管理画面（ダッシュボード）
+   はスキーマ含めパイロット実装済み。`docs/design/design.md`参照）。
+4. ダッシュボードに「クローズ要求一覧」画面（論点C3の採用結果、上記「完了候補提示・クローズ」
+   参照）を実装する。
+5. 運用開始後、precision/recall（登録・クローズ候補それぞれ）を継続的にモニタリングし、
    プロンプト・`project_routing`・confidence閾値を調整する。
 
 ## 関連ドキュメント
