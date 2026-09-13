@@ -30,12 +30,21 @@ var targetPillClass = map[string]string{
 	"personal": "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200",
 }
 
+var priorityPillClass = map[string]string{
+	"highest": "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-200",
+	"high":    "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-200",
+	"medium":  "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300",
+	"low":     "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-200",
+}
+
 var funcMap = template.FuncMap{
-	"isOverdue":       isOverdue,
-	"accentBarClass":  func(status string) string { return accentBarClass[status] },
-	"accentPillClass": func(status string) string { return accentPillClass[status] },
-	"targetPillClass": func(target string) string { return targetPillClass[target] },
-	"statusLabel":     func(status string) string { return StatusLabels[status] },
+	"isOverdue":         isOverdue,
+	"accentBarClass":    func(status string) string { return accentBarClass[status] },
+	"accentPillClass":   func(status string) string { return accentPillClass[status] },
+	"targetPillClass":   func(target string) string { return targetPillClass[target] },
+	"statusLabel":       func(status string) string { return StatusLabels[status] },
+	"priorityPillClass": func(priority string) string { return priorityPillClass[priority] },
+	"priorityLabel":     func(priority string) string { return PriorityLabels[priority] },
 }
 
 var templates = template.Must(template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/*.tmpl"))

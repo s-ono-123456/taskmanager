@@ -42,7 +42,8 @@ CREATE TABLE IF NOT EXISTS tasks (
     last_synced_at TEXT,                   -- JIRA連携タスクのみ意味を持つ
     tracked INTEGER NOT NULL DEFAULT 1,    -- 0/1。falseで画面非表示・同期対象外
     due_date TEXT,                         -- 期限(YYYY-MM-DD)、nullable
-    cycle_start_date TEXT                  -- 所属する週の月曜日(YYYY-MM-DD)。NULL=バックログ
+    cycle_start_date TEXT,                 -- 所属する週の月曜日(YYYY-MM-DD)。NULL=バックログ
+    priority TEXT NOT NULL DEFAULT 'medium' -- 優先度(highest/high/medium/low)
 );
 
 CREATE TABLE IF NOT EXISTS user_map (

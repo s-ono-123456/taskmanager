@@ -30,6 +30,15 @@
   ロールオーバー対象外で据え置かれるため）。直近7日以内の完了のみ表示される既存ルールに従う。
 - 編集モーダルには「週の所属」を読み取り専用で表示するのみ（切替はD&Dのみのため編集不可）。
 
+## 優先度バッジ
+
+- 各カードに優先度（最高/高/中/低、`internal/web/kanban.go`の`Priorities`/`PriorityLabels`）を
+  色分けバッジで表示する（`target`バッジの隣、`priorityPillClass`/`priorityLabel`関数）。
+  デフォルトは「中」。並び順（`created_at DESC`固定）・レーン/ステータス構造には一切影響しない
+  （比較検討の経緯は`docs/adr/complete/task-priority-field.md`参照）。
+- 編集モーダル・新規作成モーダルどちらでも変更可能（`<select name="priority">`）。ドラッグ&ドロップ
+  (`/tasks/{id}/move`)では変更されない。
+
 ## フィルタ（ツールバー）
 - 対象(`target`)プルダウンと「非表示分も表示」(`show_untracked`)チェックボックスは、
   `hx-trigger="change"`で変更時に自動送信する（絞り込みボタンは無い）。htmxの

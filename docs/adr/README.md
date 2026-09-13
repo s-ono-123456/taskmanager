@@ -36,6 +36,6 @@
 
 `task-management-automation`という広い構想（タスク管理自動化）に属する複数の意思決定は、
 `docs/adr/complete/personal-task-store.md`・`docs/adr/complete/dashboard-tech.md`・
-`docs/adr/proposals/collection-trigger.md`等、観点ごとに独立したファイルとして存在する
+`docs/adr/complete/collection-trigger.md`等、観点ごとに独立したファイルとして存在する
 （索引ファイルは無い）。全体像は`docs/design/task-management-automation.md`が各ファイルへ
 リンクする形でまとめている。

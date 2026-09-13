@@ -34,6 +34,7 @@ function bindCardActions() {
       document.getElementById('edit-target').value = card.dataset.target;
       document.getElementById('edit-status').value = card.dataset.status;
       document.getElementById('edit-due-date').value = card.dataset.dueDate;
+      document.getElementById('edit-priority').value = card.dataset.priority;
 
       document.getElementById('edit-info-id').textContent = '#' + card.dataset.taskId;
       document.getElementById('edit-info-cycle').textContent =

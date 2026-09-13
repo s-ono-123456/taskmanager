@@ -12,10 +12,14 @@
 `/work/public/taskmanager` へ移動し、全体構想のADRもこのリポジトリへ移動した
 （`docs/adr/proposals/`・`docs/adr/complete/`配下、後述の「関連ドキュメント」参照）。
 本サービスはそのうち「スキーマとダッシュボードUIのパイロット実装」に相当し、**外部通信は
-一切行わない**（Mattermost/メール/Zoom/JIRA/Claude APIいずれにも接続しない。JIRA連携相当の
-操作はすべてログ出力のみのスタブ）。まだ実装していない`collector`/`extractor`/`syncer`/
-`registrar`/`digest`部分の確定設計は`docs/design/task-management-automation.md`にまとめている
-（本書はダッシュボードUI側のみを扱い、重複させない）。
+原則行わない**（メール/Zoom/JIRA/Claude APIいずれにも接続しない。JIRA連携相当の操作はすべて
+ログ出力のみのスタブ）。2026-09-13、唯一の例外としてMattermost collector（収集のみ、
+`internal/mattermost/`）を追加した。実際にMattermost APIをポーリングして`messages`テーブルへ
+実データを保存するが、抽出(extractor)・JIRA自動起票(registrar)・digestは対象外で、これらは
+引き続き未実装（比較検討の経緯は`docs/adr/complete/mattermost-collector-scope.md`参照）。
+まだ実装していない`extractor`/`syncer`/`registrar`/`digest`部分の確定設計は
+`docs/design/task-management-automation.md`にまとめている（本書はダッシュボードUI側のみを
+扱い、重複させない）。
 
 **2026-09-12、Python/Flask実装からGo + sqlc + htmxへ全面移行した。** 「軽量さ」（単一バイナリ
 配布・依存の少なさ）と「ソースコードのわかりやすさ」（特にSQLがロジックから分離されている
@@ -39,6 +43,9 @@
 │   ├── store.go                 # DB接続・起動時マイグレーション
 │   ├── seed.go                  # サンプルデータ投入(再実行可能・全件作り直し)
 │   └── rollover.go              # 週次サイクルの自動繰り越し(常駐goroutine)
+├── internal/mattermost/         # Mattermost collector(収集のみ、外部通信の唯一の例外)
+│   ├── client.go                 # net/httpのみの最小限のRESTクライアント
+│   └── collector.go              # 設定読み込み・常駐goroutineでのポーリング
 ├── internal/web/                # HTTPハンドラ・業務ロジック
 │   ├── handlers.go               # 7ルートのハンドラ
 │   ├── kanban.go                 # 業務ロジック集約(closed_at計算・7日フィルタ・ラベル等)
@@ -80,8 +87,8 @@
 | メソッド/パス | 概要 |
 |---|---|
 | `GET /` | ボード表示。`target`・`show_untracked`をクエリパラメータで受け取る |
-| `POST /tasks/new` | 新規タスク作成（due_date任意）。target が jira_a/jira_b の場合はJIRA起票スタブのログのみ出力（実通信なし） |
-| `POST /tasks/{id}/edit` | 編集モーダルからの保存。title/target/statusを検証し更新（due_dateは未入力ならNULLとして保存）。`status`が`done`へ/から変化する際は`closed_at`をその場で設定/クリアする |
+| `POST /tasks/new` | 新規タスク作成（due_date任意、priorityは未指定なら`medium`）。target が jira_a/jira_b の場合はJIRA起票スタブのログのみ出力（実通信なし） |
+| `POST /tasks/{id}/edit` | 編集モーダルからの保存。title/target/status/priorityを検証し更新（due_dateは未入力ならNULLとして保存）。`status`が`done`へ/から変化する際は`closed_at`をその場で設定/クリアする |
 | `POST /tasks/{id}/move` | ドラッグ&ドロップからの状態変更。`status`に加え`cycle`(`this_week`/`backlog`)も受け取り両方を更新する。JIRA連携タスクなら`stubJiraTransition()`を呼ぶ |
 | `POST /tasks/{id}/track` | 「非表示」/「再表示」ボタン。後述の業務ルール参照 |
 | `POST /candidates/{id}/approve` | クローズ要求一覧の「承認」ボタン。後述の業務ルール参照 |
@@ -104,6 +111,11 @@
 - 環境変数: `TASK_DASHBOARD_HOST` / `TASK_DASHBOARD_PORT` / `TASK_DASHBOARD_DB_PATH` /
   `TASK_DASHBOARD_AUTO_SEED`（`1`ならDBが空の場合のみ自動シード実行。実連携を組み込んだら
   `0`にする想定）。環境変数名・意味はFlask版から変更していない。
+- Mattermost collector用の環境変数（すべて未設定ならcollectorは起動しない）:
+  `MATTERMOST_BOT_TOKEN` / `MATTERMOST_SERVER_URL`（例: `https://mattermost.example.com`） /
+  `MATTERMOST_CHANNEL_ROUTES`（例: `channelID1:jira_a,channelID2:jira_b,channelID3:personal`。
+  MattermostのチャンネルIDと`project_hint`の対応をカンマ区切りで指定）。実際のトークン値は
+  リポジトリ・ドキュメントに書かず、`compose/docker-compose.yml`等でユーザーが個別に設定する。
 
 ## 開発時のビルド方法
 
@@ -144,14 +156,17 @@ fire-and-forget実装としている（将来グレースフルシャットダ�
 
 ## 既知の制限・今後の課題
 
-- `collector`/`extractor`/`syncer`/`registrar`（Mattermost/JIRA/Zoom/Claude APIとの実連携）は
-  未実装。着手にはMattermost botトークン・JIRA APIトークン・Zoom Server-to-Server OAuthアプリの
-  準備、`project_routing`/`user_map`の初期データ整備が必要（ユーザー側準備待ち）。
+- Mattermost collector（`internal/mattermost/`）は収集のみ実装済み。`extractor`
+  （メッセージからタスク候補への抽出、Claude API使用）・`syncer`（JIRA実同期）・`registrar`
+  （JIRA自動起票）・`digest`（日次まとめ投稿）は未実装。着手にはJIRA APIトークン・
+  `project_routing`/`user_map`の初期データ整備が必要（ユーザー側準備待ち）。メール・Zoom収集も
+  未実装（着手にはIMAP認証情報・Zoom Server-to-Server OAuthアプリの準備が必要）。
 - `user_map`テーブル、および`candidates`テーブルのうち`kind=task`の候補は器のみ用意されており
-  画面・業務ロジックからは未使用（collector/extractor未実装のため実データは投入されない）。
-  `kind=completion`の候補は「クローズ要求一覧」画面が参照するが、collector/extractorが
+  画面・業務ロジックからは未使用（extractor未実装のため実データは投入されない）。
+  `kind=completion`の候補は「クローズ要求一覧」画面が参照するが、extractorが
   無いため実運用ではこのテーブルにデータが投入されず、画面は空のままになる
-  （現状は`seed.go`のサンプルデータでのみ動作確認できる）。
+  （現状は`seed.go`のサンプルデータでのみ動作確認できる）。Mattermost collectorが保存する
+  `messages`テーブルの実データも、extractor未実装のため`candidates`へは変換されない。
 - 認証・アクセス制御は無い。外部公開しない前提（既定では`127.0.0.1`バインド、Docker運用時も
   LAN内利用を想定）。
 - JS無効時、編集/新規作成フォーム・非表示切替ボタンは通常のHTMLフォーム送信（トップレベル

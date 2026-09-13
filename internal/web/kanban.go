@@ -34,6 +34,17 @@ var LaneLabels = map[string]string{
 	"backlog":   "バックログ",
 }
 
+// Priorities: 優先度4段階（並び順は高い順）。全target共通、カード上のバッジ表示のみに使い
+// レーン構造・並び順には影響しない（docs/adr/proposals/task-priority-field.md参照）。
+var Priorities = []string{"highest", "high", "medium", "low"}
+
+var PriorityLabels = map[string]string{
+	"highest": "最高",
+	"high":    "高",
+	"medium":  "中",
+	"low":     "低",
+}
+
 func isValidTarget(t string) bool {
 	for _, v := range Targets {
 		if v == t {
@@ -54,6 +65,15 @@ func isValidStatus(s string) bool {
 
 func isValidCycle(c string) bool {
 	return c == "this_week" || c == "backlog"
+}
+
+func isValidPriority(p string) bool {
+	for _, v := range Priorities {
+		if v == p {
+			return true
+		}
+	}
+	return false
 }
 
 // cycleStartDateForLane はD&Dで指定されたレーン名から、保存すべきcycle_start_date
@@ -153,6 +173,7 @@ type Card struct {
 	LastSyncedAt   string
 	DueDate        string
 	CycleStartDate string // ""ならバックログ、値ありなら所属週の月曜日(YYYY-MM-DD)
+	Priority       string // highest/high/medium/low
 	MsgSource      string
 	MsgChannel     string
 	MsgAuthor      string
@@ -174,6 +195,7 @@ func cardFromRow(row taskstore.ListTasksRow) Card {
 		LastSyncedAt:   row.LastSyncedAt.String,
 		DueDate:        row.DueDate.String,
 		CycleStartDate: row.CycleStartDate.String,
+		Priority:       row.Priority,
 		MsgSource:      row.MsgSource.String,
 		MsgChannel:     row.MsgChannel.String,
 		MsgAuthor:      row.MsgAuthor.String,
@@ -291,6 +313,8 @@ type BoardData struct {
 	LaneLabels     map[string]string
 	Statuses       []string
 	StatusLabels   map[string]string
+	Priorities     []string
+	PriorityLabels map[string]string
 	Targets        []string
 	SelectedTarget string
 	ShowUntracked  bool
@@ -350,6 +374,8 @@ func LoadBoardData(ctx context.Context, q *taskstore.Queries, filter BoardFilter
 		LaneLabels:     LaneLabels,
 		Statuses:       Statuses,
 		StatusLabels:   StatusLabels,
+		Priorities:     Priorities,
+		PriorityLabels: PriorityLabels,
 		Targets:        Targets,
 		SelectedTarget: target,
 		ShowUntracked:  filter.ShowUntracked,

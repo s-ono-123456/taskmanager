@@ -5,6 +5,67 @@
 
 ---
 
+## 2026-09-13 / 優先度フィールド追加 + Mattermost collector（収集のみ）を実装
+
+### やったこと
+
+- Cyclesに続き、ユーザーから「優先度」「Mattermost連携機能」の要望を受け、grillingスキールで
+  前提を深掘りした。優先度は小さめの検討で済んだが、Mattermost連携は
+  「外部通信は一切行わない」という本リポジトリの核となる方針を実際に破る決定だったため、
+  スコープ（収集のみ vs フルパイプライン）・実装言語（Go vs Python）を特に慎重に確認した。
+  ADR4本（`docs/adr/complete/task-priority-field.md`・`mattermost-collector-scope.md`・
+  `mattermost-collector-language.md`、既存の`collection-trigger.md`も今回の実装で使うため
+  `complete/`へ移動）として記録。
+- **優先度フィールド**: `tasks.priority`(highest/high/medium/low、デフォルトmedium)を追加。
+  既存の`due_date`/`cycle_start_date`追加と同じ`columnExists`+`ALTER TABLE`マイグレーション
+  パターンを踏襲。カード上に色分けバッジ表示のみ（並び順・レーン構造には影響しない）、
+  編集・新規作成モーダルで変更可能。
+- **Mattermost collector（収集のみ）**: 新規パッケージ`internal/mattermost/`を追加。
+  Mattermost公式Go SDK(`server/public/model`)は使わず、`net/http`のみの最小限のRESTクライアント
+  （`GET /api/v4/channels/{id}/posts?since=...`・`GET /api/v4/users/{id}`）を実装。
+  `rollover.go`と同じ「常駐goroutine+time.Ticker」パターンで10分間隔ポーリングし、
+  既存の`messages`テーブルへ保存する。cursor（前回取得位置）は新規テーブルを作らず
+  `messages`テーブル自体の最新`received_at`から算出、重複防止は`source`+`source_id`の
+  存在チェックで行う。`MATTERMOST_BOT_TOKEN`未設定時は起動をスキップし既存のseed動作に
+  影響しない。認証情報はユーザーが自分の環境で設定し、このセッションには一切共有されていない。
+- ユーザーからの指摘（「Anthropic SDKはGoにもあるのでは？」）を受けて、当初「抽出(extractor)で
+  Python(`anthropic` SDK)が必要」という判断が誤りだったことを訂正した
+  （`github.com/anthropics/anthropic-sdk-go`という公式Go SDKが存在する）。将来extractorを
+  追加する際もGoで完結できる見込みとなり、`docs/design/task-management-automation.md`の
+  技術スタック節にその旨を追記した。
+- `docs/design/data-model.md`・`screen-board.md`・`design.md`・`task-management-automation.md`・
+  `CLAUDE.md`（「外部通信は一切行わない」→「原則行わない、Mattermostのみ例外」に訂正）を
+  実装内容に合わせて更新。
+
+### 検証したこと
+
+- `sqlc generate`→`go build`→`go vet`が通ることを確認。
+- 優先度: アプリを起動しcurlでボードHTMLを取得、カードの`data-priority`属性・バッジ表示・
+  編集モーダルでの`priority=highest`への更新が反映されることを確認。
+- Mattermost collector: `MATTERMOST_BOT_TOKEN`未設定でアプリを起動し、collectorがスキップされ
+  既存のseed起動に一切影響しないことをログで確認。`parseChannelRoutes`/`LoadConfigFromEnv`は
+  一時的なGoテスト（検証後に削除、Cyclesの`rollover_verify_test.go`と同じ進め方）で検証。
+  実際にMattermostサーバーへ接続する部分は、ユーザーが認証情報を共有しない方針のため
+  このセッションでは検証できていない（ユーザー自身の環境での動作確認が必要）。
+
+### 学んだこと・注意点
+
+- 技術的な実装詳細（どの言語で書くべきか等）についてはgrillingの中でもユーザーに聞かず、
+  自分で事実を調べて回答すべき（今回はMattermost公式Go SDKの存在をWebSearchで確認してから
+  回答した）。一度誤った前提（Python=Anthropic SDKのため必須）で回答してしまった際は、
+  ユーザーからの指摘を受けて訂正することを厭わず、関連ドキュメントまで含めて速やかに
+  正しい情報に更新する方が良い。
+- 「外部通信は一切行わない」のような、プロジェクトの複数箇所（CLAUDE.md・design.md・
+  ADR等）に散らばって明記された核となる方針を変更する場合、grep等で参照箇所を洗い出して
+  すべて更新しないと、ドキュメント間で矛盾した記述が残る。今回は`CLAUDE.md`冒頭・
+  `design.md`の位置づけ・`task-management-automation.md`の位置づけの3箇所で同じ主張が
+  繰り返されており、すべて訂正が必要だった。
+- Dockerでsqlite3 CLIを使った検証で権限エラーが再発しなかった（今回はGoの一時テストのみで
+  検証を完結させたため）。DBの中身を直接確認したい場面では、最初からアプリと同じドライバを
+  使うGoの一時テスト方式を使う方針を継続する。
+
+---
+
 ## 2026-09-13 / Linear風Cycles機能（週次の今週/バックログ区分）を追加
 
 ### やったこと

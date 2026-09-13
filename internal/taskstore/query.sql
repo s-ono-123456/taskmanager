@@ -17,13 +17,13 @@ SELECT * FROM tasks WHERE id = ?;
 -- name: CreateTask :one
 INSERT INTO tasks
   (source_message_id, title, description, target, status, jira_key,
-   created_at, closed_at, last_synced_at, tracked, due_date, cycle_start_date)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+   created_at, closed_at, last_synced_at, tracked, due_date, cycle_start_date, priority)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: UpdateTask :exec
 UPDATE tasks SET title = ?, description = ?, target = ?,
-                 status = ?, closed_at = ?, due_date = ? WHERE id = ?;
+                 status = ?, closed_at = ?, due_date = ?, priority = ? WHERE id = ?;
 
 -- name: UpdateTaskStatus :exec
 UPDATE tasks SET status = ?, closed_at = ? WHERE id = ?;
@@ -104,3 +104,9 @@ SELECT * FROM tasks WHERE jira_key = ? LIMIT 1;
 SELECT * FROM tasks
 WHERE target = ? AND status != 'done' AND tracked = 1
 ORDER BY created_at DESC;
+
+-- name: MessageExistsBySourceID :one
+SELECT EXISTS(SELECT 1 FROM messages WHERE source = ? AND source_id = ?);
+
+-- name: LastMessageReceivedAt :one
+SELECT CAST(COALESCE(MAX(received_at), '') AS TEXT) FROM messages WHERE source = 'mattermost' AND channel_or_meeting = ?;

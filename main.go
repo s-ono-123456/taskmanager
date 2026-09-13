@@ -17,6 +17,7 @@ import (
 	"os"
 	"time"
 
+	"taskmanager/internal/mattermost"
 	"taskmanager/internal/taskstore"
 	"taskmanager/internal/web"
 )
@@ -58,6 +59,18 @@ func main() {
 		log.Printf("起動時ロールオーバー: %d件のタスクを繰り越しました", affected)
 	}
 	taskstore.StartRolloverLoop(ctx, db)
+
+	// Mattermost collector(収集のみ、抽出・JIRA自動起票は対象外)。認証情報が未設定の環境
+	// (既存のseedデータのみでの動作確認等)には一切影響しない
+	// (docs/adr/proposals/mattermost-collector-scope.md参照)。
+	if cfg, configured, err := mattermost.LoadConfigFromEnv(); err != nil {
+		log.Printf("mattermost config invalid, skipping collector: %v", err)
+	} else if configured {
+		mattermost.StartCollectorLoop(ctx, db, cfg)
+		log.Println("Mattermost collectorを起動しました")
+	} else {
+		log.Println("MATTERMOST_BOT_TOKEN未設定のため、Mattermost collectorは起動しません")
+	}
 
 	staticFS, err := fs.Sub(embeddedStatic, "static")
 	if err != nil {

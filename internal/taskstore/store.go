@@ -67,6 +67,18 @@ func InitSchema(ctx context.Context, db *sql.DB) error {
 			return fmt.Errorf("add cycle_start_date column: %w", err)
 		}
 	}
+
+	// 既存DB(priority列がまだ無いもの)へのマイグレーション。DEFAULT付きなので既存行にも
+	// 自動的に'medium'が入る。
+	hasPriority, err := columnExists(ctx, db, "tasks", "priority")
+	if err != nil {
+		return fmt.Errorf("check priority column: %w", err)
+	}
+	if !hasPriority {
+		if _, err := db.ExecContext(ctx, "ALTER TABLE tasks ADD COLUMN priority TEXT NOT NULL DEFAULT 'medium'"); err != nil {
+			return fmt.Errorf("add priority column: %w", err)
+		}
+	}
 	return nil
 }
 

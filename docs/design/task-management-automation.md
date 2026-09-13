@@ -4,7 +4,9 @@
 
 本ドキュメントは、タスク管理自動化構想（JIRA2プロジェクト＋個人タスクをMattermost/メール/
 Zoomから自動収集し、JIRA自動起票・完了候補提示まで行う）のうち、**まだ実装されていない
-`collector`/`extractor`/`syncer`/`registrar`/`digest`部分の確定した設計**をまとめたものである。
+`extractor`/`syncer`/`registrar`/`digest`部分の確定した設計**をまとめたものである
+（`collector`のうちMattermost分は2026-09-13にGoで実装済み。`docs/design/data-model.md`
+「Mattermost collector（収集のみ）」参照。メール/Zoom collectorは未実装）。
 各設計判断がなぜそうなったか（比較した案・採用理由）は、本書の各所からリンクしている
 `docs/adr/proposals/`・`docs/adr/complete/`配下の論点ファイル（決定済みかつ実装済みのものは
 `complete/`、実装がまだのものは`proposals/`）を参照。
@@ -130,11 +132,13 @@ DBスキーマ・ER図は`docs/design/data-model.md`を参照（パイロット�
 
 ## 収集（収集源ごと）
 
-トリガー方式は[収集トリガー方式](../adr/proposals/collection-trigger.md)で
+トリガー方式は[収集トリガー方式](../adr/complete/collection-trigger.md)で
 採用したcron定期ポーリング。
 
-- **Mattermost**: cron10分間隔で監視対象チャンネル（複数可、プロジェクトA/B用チャンネルや個人
-  DMなど）をポーリングし`messages`へ保存。チャンネルごとに`project_hint`を設定。
+- **Mattermost**: **実装済み**（`internal/mattermost/`、Go）。10分間隔で監視対象チャンネル
+  （複数可、`MATTERMOST_CHANNEL_ROUTES`環境変数で指定）をポーリングし`messages`へ保存。
+  チャンネルごとに`project_hint`を設定。詳細は`docs/design/data-model.md`
+  「Mattermost collector（収集のみ）」参照。
 - **メール**: IMAPで監視対象フォルダ/ラベルをcronポーリング。フォルダごとに`project_hint`を設定。
 - **Zoom**: cronでZoom API（Server-to-Server OAuth）を使い、終了済み会議一覧を取得。Zoom AI
   Companionの会議要約API（overview・next steps/action items）を取得し、要約全文を1件の
@@ -232,23 +236,37 @@ statusの粒度は[タスクの進捗管理粒度](../adr/complete/status-granul
 
 ## 技術スタック（collector/extractor/syncer/registrar/digest側）
 
-Python（リポジトリの既存方針どおりルートの`.venv`/uv環境を使用）、`sqlite3`標準ライブラリ、
-`requests`でMattermost/JIRA/Zoom各API呼び出し（ZoomはServer-to-Server OAuth）、`anthropic` SDK
-でClaude API呼び出し、Dockerコンテナ＋cronで定期実行。
+**Mattermost collectorはGoで実装済み**（`internal/mattermost/`、ダッシュボードと同じ
+taskmanagerリポジトリ・同じバイナリ内の常駐goroutine。標準ライブラリ`net/http`のみで
+Mattermost REST APIを呼び出し、外部SDK依存は無い）。当初はPython想定だったが、
+Anthropic公式Go SDK（`github.com/anthropics/anthropic-sdk-go`）の存在を確認したことで、
+将来extractorをAI(Claude API)で実装する場合もGoで完結でき、Pythonを新規に持ち込む
+技術的必然性が無いと判断した（比較検討の経緯は
+`docs/adr/complete/mattermost-collector-language.md`参照）。
+
+未実装のメール/Zoom collector・extractor・syncer・registrar・digestについては、引き続き
+以下の想定（Python、リポジトリの既存方針どおりルートの`.venv`/uv環境を使用、`sqlite3`標準
+ライブラリ、`requests`でJIRA/Zoom各API呼び出し（ZoomはServer-to-Server OAuth）、`anthropic`
+SDKでClaude API呼び出し、Dockerコンテナ＋cronで定期実行）を置くが、Mattermost collectorの
+実装経験を踏まえるとこれらもGoで実装できる可能性があり、着手時に改めて技術選定を見直す
+余地がある。
 
 ダッシュボード側の技術スタック（Go + sqlc + htmx）は別選定であり、`docs/design/design.md`と
 [ダッシュボードの実装技術](../adr/complete/dashboard-tech.md)を参照。
 
 ## 想定される次の一手
 
-1. 認証情報・権限の準備（ユーザー側）: Mattermost botトークン、JIRA APIトークン、Zoom
-   Server-to-Server OAuthアプリ（会議情報・会議要約の読み取りスコープ）。
-2. `project_routing`（監視対象チャンネル/メールフォルダ/Zoom会議シリーズと`project_hint`の対応）
-   と`user_map`（主要メンバーの初期データ）を整備する。
-3. collector（mattermost/email/zoom）・extractor・registrar（JIRA登録/個人タスク登録）・
-   digest（新規登録・対象不明タスクの日次まとめ投稿）を実装する（管理画面（ダッシュボード）
-   はスキーマ・クローズ要求一覧画面含めパイロット実装済み。`docs/design/design.md`参照）。
-4. 運用開始後、precision/recall（登録・クローズ候補それぞれ）を継続的にモニタリングし、
+1. **Mattermost collector（収集のみ）は実装済み**（`internal/mattermost/`、2026-09-13。
+   `docs/design/data-model.md`「Mattermost collector（収集のみ）」参照）。認証情報
+   （Bot Token・サーバーURL・`MATTERMOST_CHANNEL_ROUTES`）はユーザーが自身の環境で設定する。
+2. 残る認証情報・権限の準備（ユーザー側）: JIRA APIトークン、Zoom Server-to-Server OAuth
+   アプリ（会議情報・会議要約の読み取りスコープ）、メールのIMAP認証情報。
+3. `user_map`（主要メンバーの初期データ）を整備する（`project_routing`のうちMattermost分は
+   `MATTERMOST_CHANNEL_ROUTES`で代替済み。メール/Zoom分は別途整備が必要）。
+4. extractor・registrar（JIRA登録/個人タスク登録）・digest（新規登録・対象不明タスクの
+   日次まとめ投稿）、メール/Zoom collectorを実装する（管理画面（ダッシュボード）は
+   スキーマ・クローズ要求一覧画面含めパイロット実装済み。`docs/design/design.md`参照）。
+5. 運用開始後、precision/recall（登録・クローズ候補それぞれ）を継続的にモニタリングし、
    プロンプト・`project_routing`・confidence閾値を調整する。
 
 ## 関連ドキュメント

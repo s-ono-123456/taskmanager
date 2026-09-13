@@ -2,7 +2,8 @@
 
 - 起票: 2026-09-12 / タスク管理自動化構想の一部（`docs/design/task-management-automation.md` 参照）
 - 論点: Mattermost/メールからのタスク自動収集を、どのタイミング・方式でトリガーするか。
-- 状態: **採用済み（B1、2026-09-12）**
+- 状態: **採用済み・実装完了（B1、2026-09-12決定・2026-09-13にMattermost collectorで実装。
+  `internal/mattermost.PollInterval = 10 * time.Minute`）**
 
 ## 方針案
 

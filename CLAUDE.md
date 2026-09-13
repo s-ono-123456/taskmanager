@@ -4,8 +4,10 @@
 
 タスク管理自動化構想（JIRA2プロジェクト＋個人タスクをMattermost/メール/Zoomから
 自動収集し、JIRA自動起票・完了候補提示まで行う）のうち、「スキーマとダッシュボード
-UIのパイロット実装」に相当するリポジトリ。**外部通信は一切行わない。**
-Mattermost/メール/Zoom/JIRA/Claude APIいずれにも接続せず、JIRA連携相当の操作は
+UIのパイロット実装」に相当するリポジトリ。**外部通信は原則行わない**が、唯一の例外として
+Mattermost collector（`internal/mattermost/`、収集のみ。2026-09-13追加）は実際にMattermost
+APIへポーリング接続する（Bot Token等の認証情報はユーザーが環境変数で設定、未設定なら
+起動しない）。メール/Zoom/JIRA/Claude APIへは引き続き一切接続せず、JIRA連携相当の操作は
 すべて`stubJiraTransition()`によるログ出力のみ。
 
 プロジェクト概要・技術スタック・ディレクトリ構成・実行方法は`README.md`を参照。
@@ -37,8 +39,15 @@ DB設計は`docs/design/data-model.md`、画面設計は`docs/design/screen-boar
 - 「クローズ要求一覧」（`candidates.kind=completion`の承認/却下）で、候補に
   `related_jira_key`が無い場合は対象タスクをLLMが自動推定せず、**画面上の`<select>`で
   人間が選ぶ**（collector/extractor未実装のための代替。承認時はサーバー側で自動解決しない）。
-  また、collector/extractorが無いため実運用ではこの一覧に実データが投入されず、
+  また、extractorが無いため実運用ではこの一覧に実データが投入されず、
   `seed.go`のサンプルデータでのみ動作確認できる。
+- **優先度(`priority`)は表示専用**（最高/高/中/低、デフォルト「中」）。カード上のバッジ
+  表示のみで、並び順（`created_at DESC`固定）・レーン/ステータス構造には一切影響しない。
+  編集・新規作成モーダルで変更可能だが、ドラッグ&ドロップ（`/tasks/{id}/move`）では
+  変更されない。
+- **Mattermost collectorは収集のみ**（`internal/mattermost/`）。実際に`messages`テーブルへ
+  実データを保存するが、そこからのタスク自動抽出（extractor）・JIRA自動起票は行わない
+  （未実装）。`MATTERMOST_BOT_TOKEN`が未設定の環境では起動自体しない。
 
 ## 関連ドキュメント
 

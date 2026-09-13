@@ -91,6 +91,10 @@ func (s *Server) handleNewTask(w http.ResponseWriter, r *http.Request) {
 	filter := filterFromRequest(r)
 	title := strings.TrimSpace(r.FormValue("title"))
 	target := r.FormValue("target")
+	priority := r.FormValue("priority")
+	if priority == "" {
+		priority = "medium"
+	}
 
 	if title == "" {
 		s.respondBoard(w, r, filter, &Toast{Category: "error", Message: "タイトルは必須です"})
@@ -98,6 +102,10 @@ func (s *Server) handleNewTask(w http.ResponseWriter, r *http.Request) {
 	}
 	if !isValidTarget(target) {
 		s.respondBoard(w, r, filter, &Toast{Category: "error", Message: "対象プロジェクトの値が不正です"})
+		return
+	}
+	if !isValidPriority(priority) {
+		s.respondBoard(w, r, filter, &Toast{Category: "error", Message: "優先度の値が不正です"})
 		return
 	}
 
@@ -109,6 +117,7 @@ func (s *Server) handleNewTask(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:   nowISO(),
 		Tracked:     1,
 		DueDate:     nullStrIfNotEmpty(r.FormValue("due_date")),
+		Priority:    priority,
 		// 新規作成タスクは常にバックログ固定(仕様)。CycleStartDateは未指定のまま
 		// ゼロ値sql.NullString{}(NULL)とする。
 	})
@@ -150,6 +159,10 @@ func (s *Server) handleEditTask(w http.ResponseWriter, r *http.Request) {
 	title := strings.TrimSpace(r.FormValue("title"))
 	target := r.FormValue("target")
 	status := r.FormValue("status")
+	priority := r.FormValue("priority")
+	if priority == "" {
+		priority = "medium"
+	}
 
 	if title == "" {
 		s.respondBoard(w, r, filter, &Toast{Category: "error", Message: "タイトルは必須です"})
@@ -163,6 +176,10 @@ func (s *Server) handleEditTask(w http.ResponseWriter, r *http.Request) {
 		s.respondBoard(w, r, filter, &Toast{Category: "error", Message: "状態の値が不正です"})
 		return
 	}
+	if !isValidPriority(priority) {
+		s.respondBoard(w, r, filter, &Toast{Category: "error", Message: "優先度の値が不正です"})
+		return
+	}
 
 	closedAt := closedAtForTransition(task.Status, status, task.ClosedAt)
 
@@ -173,6 +190,7 @@ func (s *Server) handleEditTask(w http.ResponseWriter, r *http.Request) {
 		Status:      status,
 		ClosedAt:    closedAt,
 		DueDate:     nullStrIfNotEmpty(r.FormValue("due_date")),
+		Priority:    priority,
 		ID:          id,
 	}); err != nil {
 		log.Printf("update task: %v", err)
