@@ -130,6 +130,12 @@ Mattermost APIをポーリングして取得した投稿を**取得時に即座�
   `'auto_registered'`）。`target`不明の`kind=task`は「タスク候補一覧」画面
   （`docs/design/screen-task-candidates.md`参照）で人間が承認/却下する。`kind=completion`は
   既存の「クローズ要求一覧」画面が参照する。
+- **対象タスクのAI推定**: `kind=completion`かつ`related_jira_key`が本文から抽出できない
+  候補について、同じ`Classify`呼び出しに`project_hint`の未クローズタスク一覧(id+title)を
+  あわせて渡し、対象タスクを一意に推定できれば`candidates.suggested_task_id`に保存する
+  （確信が持てなければ空のまま）。クローズ要求一覧の`<select>`の初期選択肢として使うのみで、
+  承認操作自体は引き続き人間が行う（自動クローズはしない）。
+  `docs/adr/complete/close-request-target-task-suggestion.md`参照。
 - **保存方針**: `kind=none`または信頼度がしきい値未満（`MinCandidateConfidence`、目安0.3）の
   投稿は`messages`テーブルに一切保存しない（破棄）。候補化・タスク化された投稿のみ保存し、
   `permalink_url`も記録することで、既存の「元発言」表示（`tasks.source_message_id`経由の
@@ -137,6 +143,12 @@ Mattermost APIをポーリングして取得した投稿を**取得時に即座�
 - **カーソル管理**: `messages`テーブルへの依存をやめ、`mattermost_channel_state`テーブルで
   チャンネルごとの最終処理位置（取得できた投稿の最大`create_at`、分類結果に関わらず更新）を
   保持する。
+- **原子性**: `messages`保存・`candidates`保存・(自動登録時の)`tasks`作成は`registerCandidate`
+  内で1トランザクション（`db.BeginTx`+`WithTx`）にまとめている。分けて実行すると、途中で
+  処理が中断された場合に`messages`だけが保存され`candidates`が作られない孤立レコードが生じ、
+  重複防止チェック（`MessageExistsBySourceID`）により二度と再分類されなくなる不具合が
+  実データで発生したための対応（`docs/work-log.md` 2026-09-13「Mattermost extractorの
+  孤立メッセージ不具合を修正」参照）。
 - **起動シーケンス**: 初回キャッチアップ実行は`main.go`の起動処理をブロックしないよう
   **非同期（goroutine内）**で行う。ローカルLLMでのスレッド単位の分類は逐次実行のため、
   未処理分がまとまっていると実測で数分単位の時間がかかることがあり、Cyclesの

@@ -202,17 +202,25 @@ DBスキーマ・ER図は`docs/design/data-model.md`を参照（パイロット�
 
 1. 発言内にJIRAキー（例: `PROJ-123`）が明示されていればそれをそのまま`related_jira_key`とする
    （**Mattermost分は実装済み**。LLMに本文からのJIRAキー抽出を含めて分類させる）。
-2. 明示がない場合、「未クローズタスク一覧」をLLMに提示して対象を推定させる処理は
-   **未実装のまま**（Mattermost分も含む）。この場合は画面上の`<select>`で人間が対象タスクを
-   選ぶ（`docs/design/screen-close-requests.md`参照、当初の設計の代替として運用中）。
+2. 明示がない場合、「未クローズタスク一覧」をLLMに提示して対象を推定させる
+   （**Mattermost分は実装済み**。抽出と同じ`Classify`呼び出しの中で、`project_hint`に
+   対応する未クローズタスク一覧(id+title)をあわせて渡し、一意に推定できれば
+   `candidates.suggested_task_id`に保存する。確信が持てなければ空のまま。
+   `docs/adr/complete/close-request-target-task-suggestion.md`参照）。いずれの場合も
+   対象タスクの確定・クローズ操作自体は自動化せず、画面上の`<select>`（AI推定があれば
+   初期選択済み）で人間が選び直せる状態にした上で承認する
+   （`docs/design/screen-close-requests.md`参照、`docs/adr/complete/auto-close-policy.md`の
+   「自動クローズしない」方針は維持）。メール/Zoom分（Claude API前提の当初設計）は
+   引き続き未実装のまま。
 
 クローズ候補（`candidates`のうち`kind=completion`かつ`human_verdict`が未設定の行）は、
 ダッシュボードの「クローズ要求一覧」画面に随時蓄積して表示する
 （[完了候補の承認UI](../adr/complete/completion-approval-ui.md)で採用したC3）。
 承認/却下の具体的な業務ルールは`docs/design/screen-close-requests.md`を参照（本書では
-重複させない）。対象不明の完了報告（related_jira_keyが特定できないもの）はクローズ要求
-一覧には出さず、日次まとめに「完了報告はあったが対象タスク不明」として掲載し、人間が
-手動で対応する。
+重複させない）。**Mattermost分は`related_jira_key`の有無に関わらずクローズ要求一覧に
+表示する**（無い場合は上記のAI推定を反映した`<select>`で人間が対象タスクを選ぶ）。
+「日次まとめに掲載し人間が手動で対応する」という当初設計は、日次まとめ(digest)自体が
+未実装のため運用されていない。
 
 ## 管理画面（ダッシュボード）との関係
 
