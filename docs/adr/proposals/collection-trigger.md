@@ -1,6 +1,6 @@
-# 論点: 収集トリガー方式（task-management-automation--b-collection-trigger）
+# 論点: 収集トリガー方式
 
-- 起票: 2026-09-12 / 親タスク: `task-management-automation`（docs/adr/proposals/task-management-automation.md 参照）
+- 起票: 2026-09-12 / タスク管理自動化構想の一部（`docs/design/task-management-automation.md` 参照）
 - 論点: Mattermost/メールからのタスク自動収集を、どのタイミング・方式でトリガーするか。
 - 状態: **採用済み（B1、2026-09-12）**
 

@@ -1,6 +1,6 @@
-# 論点: 完了候補の承認UI（task-management-automation--c-completion-approval-ui）
+# 論点: 完了候補の承認UI
 
-- 起票: 2026-09-12 / 親タスク: `task-management-automation`（docs/adr/proposals/task-management-automation.md 参照）
+- 起票: 2026-09-12 / タスク管理自動化構想の一部（`docs/design/task-management-automation.md` 参照）
 - 論点: 完了判定(クローズ)は候補提示＋人間承認とする（自動クローズはしない。JIRAの誤クローズは
   気づかれにくく実害が大きいため）。この人間承認をどのUIで行うか。
 - 状態: **採用済み（C3、2026-09-13。C2から変更）**

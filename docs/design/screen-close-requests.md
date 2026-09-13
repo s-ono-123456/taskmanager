@@ -6,8 +6,9 @@
 
 ## 位置づけ
 
-タスク管理自動化構想の全体設計（`docs/design/task-management-automation.md`）でADR論点C3
-として採用した「完了候補の承認UI」の実装。`candidates`テーブル（`kind='completion'`かつ
+タスク管理自動化構想の全体設計（`docs/design/task-management-automation.md`）のADR
+「完了候補の承認UI」（`docs/adr/complete/completion-approval-ui.md`）で採用案C3として
+決めた実装。`candidates`テーブル（`kind='completion'`かつ
 `human_verdict`が未設定の行）を一覧表示し、ツールバーの「クローズ要求」ボタン（承認待ち件数
 バッジ付き）からモーダルで開く。
 
@@ -58,5 +59,5 @@ collector/extractorが未実装のため、実運用では`candidates`テーブ�
 - `docs/design/design.md` — 全体方針・技術スタック・ルート一覧の索引・既知の制限。
 - `docs/design/data-model.md` — `candidates`テーブルのスキーマ詳細。
 - `docs/design/screen-board.md` — メイン画面（カンバンボード）の仕様。
-- `docs/adr/complete/task-management-automation--c-completion-approval-ui.md` — 本画面の
-  方式（C3）を採用した経緯（実装済みのため`docs/adr/complete/`へ移動済み）。
+- `docs/adr/complete/completion-approval-ui.md` — 本画面の方式（C3案）を採用した経緯。
+- `docs/adr/complete/auto-close-policy.md` — 「自動クローズしない」方針そのものの決定経緯。

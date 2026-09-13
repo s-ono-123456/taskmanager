@@ -8,8 +8,8 @@ UIのパイロット実装」に相当するリポジトリ。2026-09-12に`/wor
 **外部通信は一切行わない。** Mattermost/メール/Zoom/JIRA/Claude APIいずれにも
 接続せず、JIRA連携相当の操作はすべて`stubJiraTransition()`によるログ出力のみ。
 
-全体構想（本パイロットが将来どう拡張される想定か）は
-`docs/adr/proposals/task-management-automation.md`を参照。
+全体構想（本パイロットが将来どう拡張される想定か）は`docs/design/task-management-automation.md`
+を参照。各設計判断の経緯は`docs/adr/proposals/`・`docs/adr/complete/`配下の論点ファイルを参照。
 
 ## 技術スタック
 
@@ -83,8 +83,8 @@ docs/design/screen-close-requests.md  # 画面設計: クローズ要求一覧
 - `docs/design/data-model.md` — DB設計（テーブル定義・マイグレーション）。
 - `docs/design/screen-board.md` — 画面設計: カンバンボード画面。
 - `docs/design/screen-close-requests.md` — 画面設計: クローズ要求一覧画面。
-- `docs/adr/proposals/task-management-automation.md`（索引） — 全体構想のADR。意思決定の
-  経緯（案の比較・採用理由）を論点ごとのファイルに分割して記録している。
+- `docs/adr/proposals/`・`docs/adr/complete/` — 全体構想のADR。意思決定の経緯（案の比較・
+  採用理由）を論点ごとのファイルに分けて記録している（実装まで完了したものは`complete/`）。
 - `docs/design/task-management-automation.md` — 全体構想のうち、まだ未実装の
   collector/extractor/syncer/registrar/digestを含む確定設計（データモデル・パイプライン
   全体像）。

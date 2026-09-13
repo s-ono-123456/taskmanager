@@ -26,6 +26,6 @@
 - `docs/design/design.md` — 全体方針（位置づけ・技術スタック・ルート一覧の索引等）
 - `docs/design/data-model.md` — DB設計
 - `docs/design/screen-board.md` / `docs/design/screen-close-requests.md` — 画面設計（画面ごと）
-- `docs/adr/proposals/task-management-automation.md`（索引） — 全体構想のADR（論点ごとに分割）
+- `docs/adr/proposals/`・`docs/adr/complete/` — 全体構想のADR（論点ごとにファイルを分けて記録）
 - `docs/design/task-management-automation.md` — 全体構想のうち未実装部分の確定設計
 - `CLAUDE.md` — 技術スタック・実行方法・誤解しやすい業務ルール・運用ルール

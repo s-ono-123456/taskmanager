@@ -47,8 +47,9 @@ DB設計は`docs/design/data-model.md`、画面設計は`docs/design/screen-boar
 - `docs/design/data-model.md`（本リポジトリ内） — DB設計（テーブル定義・マイグレーション）。
 - `docs/design/screen-board.md`（本リポジトリ内） — 画面設計: カンバンボード画面。
 - `docs/design/screen-close-requests.md`（本リポジトリ内） — 画面設計: クローズ要求一覧画面。
-- `docs/adr/proposals/task-management-automation.md`（本リポジトリ内、索引） — 全体構想の
-  ADR。意思決定の経緯（案の比較・採用理由）を論点ごとのファイルに分割して記録している。
+- `docs/adr/proposals/`・`docs/adr/complete/`（本リポジトリ内） — 全体構想のADR。
+  意思決定の経緯（案の比較・採用理由）を論点ごとのファイルに分けて記録している
+  （実装まで完了したものは`complete/`）。
 - `docs/design/task-management-automation.md`（本リポジトリ内） — 全体構想のうち、まだ
   未実装のcollector/extractor/syncer/registrar/digestを含む確定設計（データモデル・
   パイプライン全体像）。

@@ -5,8 +5,9 @@
 本ドキュメントは、タスク管理自動化構想（JIRA2プロジェクト＋個人タスクをMattermost/メール/
 Zoomから自動収集し、JIRA自動起票・完了候補提示まで行う）のうち、**まだ実装されていない
 `collector`/`extractor`/`syncer`/`registrar`/`digest`部分の確定した設計**をまとめたものである。
-各設計判断がなぜそうなったか（比較した案・採用理由）は
-`docs/adr/proposals/task-management-automation.md`（索引）以下の論点ファイルを参照。
+各設計判断がなぜそうなったか（比較した案・採用理由）は、本書の各所からリンクしている
+`docs/adr/proposals/`・`docs/adr/complete/`配下の論点ファイル（決定済みかつ実装済みのものは
+`complete/`、実装がまだのものは`proposals/`）を参照。
 
 このうち「スキーマとダッシュボードUI」部分はGo + sqlc + htmxで既にパイロット実装済みであり、
 その詳細は`docs/design/design.md`を参照する（本書では重複させず、必要箇所からリンクする）。
@@ -15,14 +16,15 @@ Zoomから自動収集し、JIRA自動起票・完了候補提示まで行う）
 
 - JIRAはプロジェクトごとに別管理（2プロジェクト）。
 - 個人タスクはMattermost/メールで依頼されるが、専用の管理先がなく漏れやすい
-  （→ 個人タスクの格納先は[論点A](../adr/complete/task-management-automation--a-personal-task-store.md)）。
-- 完了判定(クローズ)は**候補提示＋人間承認**とする（自動クローズはしない）。JIRAの誤クローズは
-  気づかれにくく実害が大きいため
-  （→ 承認UIは[論点C](../adr/complete/task-management-automation--c-completion-approval-ui.md)）。
+  （→ [個人タスクの格納先](../adr/complete/personal-task-store.md)）。
+- 完了判定(クローズ)は**候補提示＋人間承認**とする（自動クローズはしない。JIRAの誤クローズは
+  気づかれにくく実害が大きいため。→
+  [完了判定の自動化可否](../adr/complete/auto-close-policy.md)）。承認をどの画面で行うかは
+  → [完了候補の承認UI](../adr/complete/completion-approval-ui.md)。
 - 利用可能な基盤: Zoom文字起こし/要約API、Claude API等のLLM呼び出し、JIRA/Mattermostの
   bot・Webhook権限、Dockerコンテナ＋cronでの定期実行環境。
 - 会議・メール本文を外部LLM API（Claude API等）に送信することはユーザー確認済み（問題なし。
-  → [論点G](../adr/proposals/task-management-automation--g-data-handling-policy.md)）。
+  → [外部LLM API送信可否](../adr/proposals/data-handling-policy.md)）。
 
 ## 全体パイプライン
 
@@ -71,14 +73,14 @@ flowchart TD
   この画面で任意のタイミングで承認した分のみ。
 
 上図のクローズ候補まわり（CLOSE1/CLOSE2 → ダッシュボード → 承認 → EXEC）は
-[論点C](../adr/complete/task-management-automation--c-completion-approval-ui.md)で採用した
+[完了候補の承認UI](../adr/complete/completion-approval-ui.md)で採用した
 C3（ダッシュボード内クローズ要求一覧）の構成。当初はC2（Mattermost日次まとめ＋リアクション
 承認）を採用していたが、2026-09-13にC3へ変更した。日次まとめ（digest）は新規登録・対象不明の
 タスク候補のみを扱い、クローズ候補の承認フローはdigestから切り離されている。
 
 ## データモデル（ER図、SQLite）
 
-個人タスクストア（[論点A](../adr/complete/task-management-automation--a-personal-task-store.md)で
+個人タスクストア（[個人タスクの格納先](../adr/complete/personal-task-store.md)で
 採用）の実体もここから育てる。
 
 ```mermaid
@@ -146,7 +148,7 @@ erDiagram
 - `user_map`未整備の担当者はassignee未設定で登録し、日次まとめで人間に確認する。
 - `project_routing`（監視対象チャンネル/メールフォルダ/Zoom会議シリーズ名 → `project_hint`の
   マッピング）はDBではなく設定ファイルで管理するため、ER図には含めていない。
-- `tasks.status`は[論点E](../adr/complete/task-management-automation--e-status-granularity.md)の
+- `tasks.status`は[タスクの進捗管理粒度](../adr/complete/status-granularity.md)の
   採用により`todo`/`in_progress`/`reviewing`/`done`の4値カンバンとし、`tasks.due_date`
   （期限、nullable）を新設した。本書内で単に「クローズ」と表現している箇所は、実体はこの
   4値のうち`done`への遷移を指す。
@@ -172,7 +174,7 @@ erDiagram
 
 ## 追跡フラグ（`tracked`）
 
-[論点F](../adr/complete/task-management-automation--f-delete-vs-hide.md)で採用した方針。
+[「追跡除外」操作の範囲](../adr/complete/delete-vs-hide.md)で採用した方針。
 「削除」（データ自体を消す）とは別に、**ローカルキャッシュには残したまま、画面表示や同期の対象
 からだけ外す**設定を設ける。
 
@@ -189,7 +191,7 @@ erDiagram
 
 ## 収集（収集源ごと）
 
-トリガー方式は[論点B](../adr/proposals/task-management-automation--b-collection-trigger.md)で
+トリガー方式は[収集トリガー方式](../adr/proposals/collection-trigger.md)で
 採用したcron定期ポーリング。
 
 - **Mattermost**: cron10分間隔で監視対象チャンネル（複数可、プロジェクトA/B用チャンネルや個人
@@ -203,7 +205,7 @@ erDiagram
 
 ## 抽出・分類
 
-外部LLM APIへの送信可否は[論点G](../adr/proposals/task-management-automation--g-data-handling-policy.md)
+外部LLM APIへの送信可否は[外部LLM API送信可否](../adr/proposals/data-handling-policy.md)
 で確認済み。
 
 Claude APIに本文＋`project_hint`をコンテキストとして渡し、`kind/confidence/target/assignee_raw/
@@ -234,7 +236,7 @@ due_date/summary`を構造化JSONで抽出する。`target`は`project_hint`が�
 
 クローズ候補（`candidates`のうち`kind=completion`かつ`human_verdict`が未設定の行）は、
 ダッシュボードの「クローズ要求一覧」画面に随時蓄積して表示する
-（[論点C](../adr/complete/task-management-automation--c-completion-approval-ui.md)で採用した
+（[完了候補の承認UI](../adr/complete/completion-approval-ui.md)で採用した
 C3）。ユーザーが任意のタイミングでこの画面を開き、個別またはまとめて承認すると、承認された
 分だけJIRA API／自前ストアでクローズを実行し、`candidates.human_verdict`を`correct`に更新する。
 却下した場合は`false_positive`として記録し、一覧から外す。対象不明の完了報告
@@ -244,7 +246,7 @@ C3）。ユーザーが任意のタイミングでこの画面を開き、個別
 ## 管理画面（ダッシュボード）との関係
 
 日次まとめ(digest)は新規登録・対象不明タスクのMattermost通知用、ダッシュボードは随時の
-ブラウジング・手動操作に加えてクローズ候補の承認UI（論点C3）も担う。
+ブラウジング・手動操作に加えてクローズ候補の承認UI（採用案C3）も担う。
 
 ```mermaid
 flowchart LR
@@ -263,12 +265,12 @@ JIRAとの整合はsyncerが定期的に保つ。DASHからの編集・クロー
 ダッシュボード自体の対象データ・一覧/詳細確認・更新・追跡しない/再度追跡する・削除
 （設けない方針）・技術スタックの詳細は、パイロット実装済みの`docs/design/design.md`を参照
 （重複記述しない）。技術スタックの選定は
-[論点D](../adr/complete/task-management-automation--d-dashboard-tech.md)、
-statusの粒度は[論点E](../adr/complete/task-management-automation--e-status-granularity.md)、
-削除を設けない方針は[論点F](../adr/complete/task-management-automation--f-delete-vs-hide.md)
+[ダッシュボードの実装技術](../adr/complete/dashboard-tech.md)、
+statusの粒度は[タスクの進捗管理粒度](../adr/complete/status-granularity.md)、
+削除を設けない方針は[「追跡除外」操作の範囲](../adr/complete/delete-vs-hide.md)
 の採用結果。
 
-**クローズ要求一覧（[論点C](../adr/complete/task-management-automation--c-completion-approval-ui.md)
+**クローズ要求一覧（[完了候補の承認UI](../adr/complete/completion-approval-ui.md)
 のC3で採用、パイロット実装済み）**: `candidates`のうち`kind=completion`かつ`human_verdict`が
 未設定の行を一覧表示し、承認/却下をワンクリックで行える画面をダッシュボードに追加した
 （`POST /candidates/{id}/approve`・`POST /candidates/{id}/reject`）。詳細は前節
@@ -279,7 +281,7 @@ statusの粒度は[論点E](../adr/complete/task-management-automation--e-status
 ## 日次まとめ（digest）の構成
 
 1メッセージの中で以下をカテゴリ分けして提示する。クローズ候補の承認はダッシュボード側
-（論点C3）で行うため、digestには含めない。
+（クローズ要求一覧、採用案C3）で行うため、digestには含めない。
 
 1. 新規登録済みタスク（JIRA/個人、当日分）
 2. 対象不明のため保留中のタスク候補（人間の判定待ち）
@@ -305,7 +307,7 @@ Python（リポジトリの既存方針どおりルートの`.venv`/uv環境を�
 でClaude API呼び出し、Dockerコンテナ＋cronで定期実行。
 
 ダッシュボード側の技術スタック（Go + sqlc + htmx）は別選定であり、`docs/design/design.md`と
-[論点D](../adr/complete/task-management-automation--d-dashboard-tech.md)を参照。
+[ダッシュボードの実装技術](../adr/complete/dashboard-tech.md)を参照。
 
 ## 想定される次の一手
 
@@ -321,7 +323,7 @@ Python（リポジトリの既存方針どおりルートの`.venv`/uv環境を�
 
 ## 関連ドキュメント
 
-- `docs/adr/proposals/task-management-automation.md`（索引） — 本書の各設計判断がなぜそうなったか
-  （案の比較・採用理由）を論点ごとに記録したADR。
+- `docs/adr/proposals/`・`docs/adr/complete/` — 本書の各設計判断がなぜそうなったか（案の比較・
+  採用理由）を論点ごとに記録したADR（本書の各所からリンクしている個別ファイル参照）。
 - `docs/design/design.md` — 「スキーマとダッシュボードUI」部分のパイロット実装（Go+sqlc+htmx）
   の詳細設計書。

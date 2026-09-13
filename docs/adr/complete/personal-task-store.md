@@ -1,6 +1,6 @@
-# 論点: 個人タスクの格納先（task-management-automation--a-personal-task-store）
+# 論点: 個人タスクの格納先
 
-- 起票: 2026-09-12 / 親タスク: `task-management-automation`（docs/adr/proposals/task-management-automation.md 参照）
+- 起票: 2026-09-12 / タスク管理自動化構想の一部（`docs/design/task-management-automation.md` 参照）
 - 論点: JIRAはプロジェクトごとに別管理（2プロジェクト）だが、Mattermost/メールで依頼される
   個人タスクには専用の管理先が無く漏れやすい。個人タスクをどこに格納するかを決める。
 - 状態: **採用済み（A2、2026-09-12）**

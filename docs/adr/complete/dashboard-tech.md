@@ -1,6 +1,6 @@
-# 論点: ダッシュボードの実装技術（task-management-automation--d-dashboard-tech）
+# 論点: ダッシュボードの実装技術
 
-- 起票: 2026-09-12 / 親タスク: `task-management-automation`（docs/adr/proposals/task-management-automation.md 参照）
+- 起票: 2026-09-12 / タスク管理自動化構想の一部（`docs/design/task-management-automation.md` 参照）
 - 論点: タスク管理ダッシュボード（Webアプリ）をどの技術スタックで実装するか。
 - 状態: **採用済み（D2、2026-09-12、パイロット実装で確定）**
 

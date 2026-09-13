@@ -5,6 +5,62 @@
 
 ---
 
+## 2026-09-13 / ADRの「索引ファイル」方式を廃止し、フラットな観点ファイル名に統一
+
+### やったこと
+
+- 直前のセッションで`task-management-automation`のADRを索引ファイル＋論点ファイル
+  （`task-management-automation--a-...`等）に分割していたが、ユーザーから連続して
+  次の指摘を受けた:
+  1. 「索引ファイルは必要か？必要な部分があれば観点を切り出してADRファイルにして」
+     → 索引ファイルの中身を精査したところ、「完了判定は自動クローズしない」という
+     決定事項が論点化されず`背景・現状`に埋もれたまま残っていた。これを新しい論点
+     ファイル（`auto-close-policy.md`）として切り出した。
+  2. 「論点が別れているならまとめる意味もないでしょう」→ 索引ファイル自体
+     （`docs/adr/proposals/task-management-automation.md`）を`git rm`で削除。
+  3. 「読みにくいだけなのでファイル名もaとかbとかtask-management-automationとか
+     つけなくていい」→ 全ファイルを`task-management-automation--{a..g}-*.md`という
+     命名から、内容だけを表す平易な名前（`personal-task-store.md`等）へ
+     `git mv`でリネームした。
+- 最終的なファイル構成: `docs/adr/complete/`に`personal-task-store.md`・
+  `completion-approval-ui.md`・`dashboard-tech.md`・`status-granularity.md`・
+  `delete-vs-hide.md`・`auto-close-policy.md`（実装済み6件）、
+  `docs/adr/proposals/`に`collection-trigger.md`・`data-handling-policy.md`
+  （決定済みだが実装が無い2件）。
+- 各ファイルの冒頭メタ情報は「起票: 2026-09-12 / タスク管理自動化構想の一部
+  （`docs/design/task-management-automation.md` 参照）」という形に統一し、索引ファイルへの
+  参照を削除した。同じ構想に属することの一覧性は、`docs/design/task-management-automation.md`
+  が各所から各論点ファイルへリンクする形で担保する。
+- `docs/design/task-management-automation.md`・`screen-close-requests.md`・
+  `data-model.md`・`design.md`・README.md・CLAUDE.md・`docs/session-context.md`・
+  `docs/adr/README.md`（本リポジトリ、および`/work/docs/adr/README.md`）の参照箇所を
+  すべて新しいファイルパスに更新した。あわせて、旧A〜Gのアルファベット表記に依存していた
+  リンクテキスト（`[論点A]`等）も、内容を表す文言に置き換えた（`completion-approval-ui.md`
+  等ファイル内部のC1/C2/C3のような単一ファイル内の選択肢ラベルはそのまま残した。これは
+  ファイル間の命名規則とは別物のため）。
+- グローバル共有スキル`~/.claude/skills/adr/SKILL.md`を全面改修し、「索引ファイル」の概念を
+  撤廃した。`<slug>`は常に単一の論点を表す平易な名前とし、タスクIDや連番接頭辞は付けない。
+  広い構想の一部であることは各ファイルの起票行に一文で示すのみとし、まとめるための索引は
+  作らない方針に統一した。`docs/adr/README.md`（本リポジトリ、`/work`双方）も同様に修正。
+
+### 学んだこと・注意点
+
+- 「論点ごとに1ファイルへ分割する」という要望を実現する際、安易に「索引ファイル」という
+  レイヤーを追加すると、論点ファイルが自己完結していればいるほど索引の存在価値が薄れ、
+  むしろ二重管理・リンク切れの温床になる。ユーザーからの指摘の通り、分割後に「まとめる
+  ファイル」が本当に必要かどうかは都度疑うべきだった。
+- ファイル命名規則を変更する（索引方式の導入、その後の全面撤廃）ような可逆性の低い意思決定は、
+  一度で確定させようとせず、実際に手を動かしてユーザーに見せながら早めにフィードバックを
+  得るとよい。今回は同一セッション内で3段階の指摘を受けて都度手戻りが発生したが、
+  「索引ファイルを作る」という最初の設計判断自体をもっと慎重に（他の選択肢と比較して）
+  検討していれば、手戻りを減らせた可能性がある。
+- ファイル名からタスクIDやアルファベット接頭辞を除去する場合、ファイル名だけでなく
+  Markdownリンクの**表示テキスト**（`[論点A]`のような）にも同じ接頭辞が embedded
+  されていないか確認する必要がある。`grep -rn "論点[A-Z]"`のような広めのパターンで
+  横断的に洗い出すと漏れが減る。
+
+---
+
 ## 2026-09-13 / ADR論点のうち実装完了分をdocs/adr/complete/へ移動
 
 ### やったこと

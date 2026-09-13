@@ -10,7 +10,7 @@
 本ドキュメントはこのリポジトリ（`taskmanager`）の**現在の実装**を仕様としてまとめたものである。
 2026-09-12に `/work`（メインリポジトリ）の `docker/task-dashboard/` から独立した別リポジトリ
 `/work/public/taskmanager` へ移動し、全体構想のADRもこのリポジトリへ移動した
-（`docs/adr/proposals/task-management-automation.md`、後述の「関連ドキュメント」参照）。
+（`docs/adr/proposals/`・`docs/adr/complete/`配下、後述の「関連ドキュメント」参照）。
 本サービスはそのうち「スキーマとダッシュボードUIのパイロット実装」に相当し、**外部通信は
 一切行わない**（Mattermost/メール/Zoom/JIRA/Claude APIいずれにも接続しない。JIRA連携相当の
 操作はすべてログ出力のみのスタブ）。まだ実装していない`collector`/`extractor`/`syncer`/
@@ -154,8 +154,9 @@ docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$(pwd):/src" -w /src
   （レーン・フィルタ・カード・編集/新規作成モーダル・D&D・「非表示」の業務ルール）。
 - `docs/design/screen-close-requests.md`（このリポジトリ内） — 画面設計: クローズ要求一覧画面
   （承認/却下の業務ルール）。
-- `docs/adr/proposals/task-management-automation.md`（このリポジトリ内、索引） — 全体構想の
-  ADR。意思決定の経緯（案の比較・採用理由）を論点ごとのファイルに分割して記録している。
+- `docs/adr/proposals/`・`docs/adr/complete/`（このリポジトリ内） — 全体構想のADR。
+  意思決定の経緯（案の比較・採用理由）を論点ごとのファイルに分けて記録している
+  （実装まで完了したものは`complete/`、決定のみで実装が無いものは`proposals/`）。
 - `docs/design/task-management-automation.md`（このリポジトリ内） — 全体構想のうち、
   まだ実装していない`collector`/`extractor`/`syncer`/`registrar`/`digest`部分の確定設計
   （データモデルER図・パイプライン全体像）。
