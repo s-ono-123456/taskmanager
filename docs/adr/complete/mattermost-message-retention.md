@@ -33,5 +33,6 @@
 
 ## 関連する設計ドキュメント
 
-- `docs/design/data-model.md`（`messages`テーブルの役割、Mattermost extractorの節）
+- `docs/design/data-model.md`（`messages`テーブルの役割）
+- `docs/design/mattermost-extractor.md`（保存方針の確定仕様）
 - `docs/adr/complete/mattermost-collector-scope.md`（本ADRが一部を上書きする元の決定）

@@ -88,7 +88,7 @@ func parseChannelRoutes(s string) (map[string]string, error) {
 
 // PollInterval: collectorが常駐goroutineでMattermost APIをポーリングする間隔
 // (docs/adr/complete/collection-trigger.md「収集トリガー方式」で採用したcron定期ポーリング。
-// docs/design/data-model.md「Mattermost extractor」節参照)。
+// docs/design/mattermost-extractor.md参照)。
 const PollInterval = 10 * time.Minute
 
 // initialLookbackWindow: あるチャンネルの処理位置が1件も無い(初回ポーリング)場合、

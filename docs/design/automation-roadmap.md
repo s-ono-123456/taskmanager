@@ -9,7 +9,7 @@ Zoomから自動収集し、JIRA自動起票・完了候補提示まで行う）
 `docs/work-log.md` 2026-09-13「task-management-automation.mdを機能別に分割」参照）。
 
 - **Mattermost分**（collector+extractor+確定target分のregistrar）は**実装済み**。詳細は
-  `docs/design/data-model.md`「Mattermost extractor」節・`docs/design/screen-close-requests.md`・
+  `docs/design/mattermost-extractor.md`・`docs/design/screen-close-requests.md`・
   `docs/design/screen-task-candidates.md`参照。
 - **メール/Zoom分**（collector/extractor/registrar/完了候補提示）は未実装。確定設計は
   `docs/design/mail-zoom-pipeline.md`参照。
@@ -126,7 +126,7 @@ statusの粒度は[タスクの進捗管理粒度](../adr/complete/status-granul
 
 - 誤検知（過検知/見逃し）: 初期は「登録も提案のみ」でノイズ率を計測してから自動登録の範囲を
   広げる段階導入が安全（Mattermost分は`MinCandidateConfidence`しきい値と、`target`確定分のみ
-  自動登録する段階導入を実施済み。`docs/design/data-model.md`「Mattermost extractor」節参照）。
+  自動登録する段階導入を実施済み。`docs/design/mattermost-extractor.md`参照）。
 - 監視範囲: Mattermost/メールの全チャンネル・全メールを対象にせず、監視対象を明示的に絞る
   設計とする（Mattermost分は`MATTERMOST_CHANNEL_ROUTES`環境変数で実装済み）。
 - Zoom APIのレート制限・必要スコープ（会議情報・会議要約の読み取り権限）を事前に確認する必要
@@ -159,8 +159,8 @@ statusの粒度は[タスクの進捗管理粒度](../adr/complete/status-granul
 
 - `docs/adr/proposals/`・`docs/adr/complete/` — 本書の各設計判断がなぜそうなったか（案の比較・
   採用理由）を論点ごとに記録したADR（本書の各所からリンクしている個別ファイル参照）。
-- `docs/design/data-model.md` — DBスキーマ・ER図、および実装済みのMattermost extractorの
-  確定仕様。
+- `docs/design/data-model.md` — DBスキーマ・ER図。
+- `docs/design/mattermost-extractor.md` — 実装済みのMattermost collector/extractorの確定仕様。
 - `docs/design/design.md` — 「スキーマとダッシュボードUI」部分のパイロット実装（Go+sqlc+htmx）
   の全体方針。
 - `docs/design/screen-board.md` / `docs/design/screen-close-requests.md` /

@@ -20,5 +20,5 @@
 
 ## 関連する設計ドキュメント
 
-- `docs/design/data-model.md`（「Mattermost extractor」節、Mattermost分は実装済み）
+- `docs/design/mattermost-extractor.md`（Mattermost分は実装済み）
 - `docs/design/mail-zoom-pipeline.md`（収集: メール/Zoomの各仕様、未実装）

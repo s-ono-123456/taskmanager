@@ -11,7 +11,7 @@
 | `candidates` | メッセージから抽出したタスク/完了候補。`kind=task`はMattermost extractorが分類した新規タスク候補（`target`確定分は自動的に`tasks`へ登録され`human_verdict='auto_registered'`が設定される。不明分は「タスク候補一覧」画面で人間が承認/却下）、`kind=completion`は完了報告候補（「クローズ要求一覧」画面が参照。`related_jira_key`が無い場合、`suggested_task_id`にAI推定の対象タスクが入り`<select>`の初期選択肢になる。`docs/adr/complete/close-request-target-task-suggestion.md`参照） | `kind`(task/completion), `confidence`, `target`, `assignee_raw`, `due_date`, `summary`, `related_jira_key`, `human_verdict`(correct/false_positive/auto_registered等), `suggested_task_id`(nullable, FK→tasks.id) |
 | `tasks` | ダッシュボードが実際に読み書きする本体 | `title`, `description`, `target`(jira_a/jira_b/personal), `status`(todo/in_progress/reviewing/done), `jira_key`, `created_at`, `closed_at`, `last_synced_at`, `tracked`(0/1), `due_date`(YYYY-MM-DD、nullable), `cycle_start_date`(所属週の月曜日、YYYY-MM-DD、nullable。NULL=バックログ), `priority`(highest/high/medium/low、デフォルトmedium) |
 | `user_map` | 発言者⇔JIRAアカウントの対応（本パイロットでは表示画面からは未使用） | `source`, `source_user_id`, `jira_account_id`, `display_name` |
-| `mattermost_channel_state` | Mattermost extractorがチャンネルごとにどこまで取得済みかを保持する（`messages`テーブルへの依存を無くしたカーソル管理、後述「Mattermost extractor」節参照） | `channel_id`(PK), `last_processed_at` |
+| `mattermost_channel_state` | Mattermost extractorがチャンネルごとにどこまで取得済みかを保持する（`messages`テーブルへの依存を無くしたカーソル管理、`docs/design/mattermost-extractor.md`参照） | `channel_id`(PK), `last_processed_at` |
 
 ## ER図
 
@@ -84,8 +84,9 @@ erDiagram
 
 - `messages.project_hint`は収集元の設定（`project_routing`）から機械的に付与する「対象
   プロジェクトの手がかり」。`project_routing`自体はDBではなく設定ファイルで管理するため、
-  ER図には含めていない（Mattermost分は環境変数`MATTERMOST_CHANNEL_ROUTES`で代替、下記
-  「Mattermost extractor」節参照。メール/Zoom分は`docs/design/mail-zoom-pipeline.md`参照）。
+  ER図には含めていない（Mattermost分は環境変数`MATTERMOST_CHANNEL_ROUTES`で代替、
+  `docs/design/mattermost-extractor.md`参照。メール/Zoom分は`docs/design/mail-zoom-pipeline.md`
+  参照）。
 - `tasks.jira_key`はJIRA起票済みなら値あり、個人タスクはNULLのまま自前ストアの実体となる。
 
 ## 週次サイクル（Cycles）
@@ -105,60 +106,6 @@ Cycleテーブルは持たない（過去サイクルの履歴参照は要件外
 並び順・レーン構造には影響しない（比較検討の経緯は`docs/adr/complete/task-priority-field.md`
 参照）。JIRA連携タスクの優先度もローカル表示専用でJIRAへは書き込まない（`stubJiraTransition`と
 同様、実同期はしない）。
-
-## Mattermost extractor（収集+ローカルLLMによる取得時分類・自動タスク登録）
-
-「外部通信は原則行わない」という本パイロットの既定方針を、Mattermostに限り覆し、実際に
-Mattermost APIをポーリングして取得した投稿を**取得時に即座にローカルLLMで分類し**、
-意味のあるものだけを残す（`internal/mattermost/`。当初は「収集のみ」で実装したが、
-実運用開始後「メッセージを全部保存するだけでは意味がない」との指摘を受けて拡張した。
-比較検討の経緯は`docs/adr/complete/mattermost-collector-scope.md`・`mattermost-collector-language.md`・
-`mattermost-extractor-llm-choice.md`・`mattermost-extractor-registration-flow.md`・
-`mattermost-extractor-batching.md`・`mattermost-message-retention.md`参照）。
-
-- **収集**: `internal/mattermost/collector.go`の常駐goroutineが**10分間隔**
-  （`PollInterval`定数）でポーリングする（トリガー方式の比較検討経緯は
-  `docs/adr/complete/collection-trigger.md`参照）。監視対象チャンネル（複数可）とその
-  `project_hint`（jira_a/jira_b/personal）は環境変数`MATTERMOST_CHANNEL_ROUTES`
-  （例: `chID1:jira_a,chID2:jira_b`）でチャンネルごとに指定する。
-- **AI**: Claude API等の外部LLMには接続せず、このホスト上に既に稼働しているローカルLLM
-  （llama-swap、OpenAI互換API）を使う。デフォルトモデルは`qwen3.8-flash-next-q5`、
-  環境変数`MATTERMOST_EXTRACTOR_LLM_URL`（既定`http://host.docker.internal:8080`）・
-  `MATTERMOST_EXTRACTOR_LLM_MODEL`で変更可能。ComfyUIと同一GPUを排他利用しており、
-  抽出処理実行時にComfyUI生成ジョブが強制停止されうるが、これは許容する方針（回避ロジックは
-  実装しない）。
-- **バッチ化**: 新着投稿をスレッド単位でグループ化し、同一スレッド内に複数の新着があれば
-  スレッド全文（`GET /api/v4/posts/{postID}/thread`）を文脈としてまとめて1回のLLM呼び出しで
-  分類する（JSON配列で結果を受け取る）。
-- **登録フロー**: `kind=task`かつ`target`が確定（`jira_a`/`jira_b`/`personal`のいずれか）
-  していれば、その場で`tasks`へ自動登録する（`candidates.human_verdict`は
-  `'auto_registered'`）。`target`不明の`kind=task`は「タスク候補一覧」画面
-  （`docs/design/screen-task-candidates.md`参照）で人間が承認/却下する。`kind=completion`は
-  既存の「クローズ要求一覧」画面が参照する。
-- **対象タスクのAI推定**: `kind=completion`かつ`related_jira_key`が本文から抽出できない
-  候補について、同じ`Classify`呼び出しに`project_hint`の未クローズタスク一覧(id+title)を
-  あわせて渡し、対象タスクを一意に推定できれば`candidates.suggested_task_id`に保存する
-  （確信が持てなければ空のまま）。クローズ要求一覧の`<select>`の初期選択肢として使うのみで、
-  承認操作自体は引き続き人間が行う（自動クローズはしない）。
-  `docs/adr/complete/close-request-target-task-suggestion.md`参照。
-- **保存方針**: `kind=none`または信頼度がしきい値未満（`MinCandidateConfidence`、目安0.3）の
-  投稿は`messages`テーブルに一切保存しない（破棄）。候補化・タスク化された投稿のみ保存し、
-  `permalink_url`も記録することで、既存の「元発言」表示（`tasks.source_message_id`経由の
-  JOIN、編集モーダル）でURL・本文をそのまま確認できる。
-- **カーソル管理**: `messages`テーブルへの依存をやめ、`mattermost_channel_state`テーブルで
-  チャンネルごとの最終処理位置（取得できた投稿の最大`create_at`、分類結果に関わらず更新）を
-  保持する。
-- **原子性**: `messages`保存・`candidates`保存・(自動登録時の)`tasks`作成は`registerCandidate`
-  内で1トランザクション（`db.BeginTx`+`WithTx`）にまとめている。分けて実行すると、途中で
-  処理が中断された場合に`messages`だけが保存され`candidates`が作られない孤立レコードが生じ、
-  重複防止チェック（`MessageExistsBySourceID`）により二度と再分類されなくなる不具合が
-  実データで発生したための対応（`docs/work-log.md` 2026-09-13「Mattermost extractorの
-  孤立メッセージ不具合を修正」参照）。
-- **起動シーケンス**: 初回キャッチアップ実行は`main.go`の起動処理をブロックしないよう
-  **非同期（goroutine内）**で行う。ローカルLLMでのスレッド単位の分類は逐次実行のため、
-  未処理分がまとまっていると実測で数分単位の時間がかかることがあり、Cyclesの
-  ロールオーバーのような軽量な同期実行には適さないため。
-- 重複防止は`source`+`source_id`（MattermostのPost ID）の存在チェックで行う。
 
 ## マイグレーション・実装上の注意
 
@@ -185,5 +132,7 @@ Mattermost APIをポーリングして取得した投稿を**取得時に即座�
 - `docs/design/screen-board.md` / `docs/design/screen-close-requests.md` — 各画面が
   このデータモデルをどう読み書きするか。
 - `docs/design/automation-roadmap.md` — 全体構想・背景・リスク・ロードマップ。
+- `docs/design/mattermost-extractor.md` — 実装済みのMattermost collector/extractorの確定仕様
+  （本書のER図・スキーマ定義は重複させず本書のみに置く）。
 - `docs/design/mail-zoom-pipeline.md` — 未実装のメール/Zoom分での`messages`/`candidates`の
-  使われ方（本書のER図・スキーマ定義は重複させず本書のみに置く）。
+  使われ方。

@@ -36,4 +36,4 @@ GPU競合（ComfyUIジョブの強制停止）は許容することとした。
 ## 関連する設計ドキュメント
 
 - `docs/design/mail-zoom-pipeline.md`（技術スタック節、メール/Zoom分のextractor実装方式）
-- `docs/design/data-model.md`（Mattermost extractorの節、実装済みのLLM選定結果）
+- `docs/design/mattermost-extractor.md`（実装済みのLLM選定結果）

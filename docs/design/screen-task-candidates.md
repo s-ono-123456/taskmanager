@@ -8,7 +8,7 @@
 
 ## 位置づけ
 
-Mattermost extractor（`docs/design/data-model.md`「Mattermost extractor」節、比較検討の経緯は
+Mattermost extractor（`docs/design/mattermost-extractor.md`、比較検討の経緯は
 `docs/adr/complete/mattermost-extractor-registration-flow.md`参照）が分類した`kind=task`の
 候補のうち、`target`（personal/jira_a/jira_b）を自動確定できなかったもの
 （`target=unknown`、または信頼度が低いもの）を一覧表示し、人間が対象を選んで承認/却下する。
@@ -53,8 +53,8 @@ Mattermost extractor（`docs/design/data-model.md`「Mattermost extractor」節�
 ## 関連ドキュメント
 
 - `docs/design/design.md` — 全体方針・技術スタック・ルート一覧の索引・既知の制限。
-- `docs/design/data-model.md` — `candidates`テーブルのスキーマ詳細、Mattermost extractorの
-  分類・登録フロー。
+- `docs/design/data-model.md` — `candidates`テーブルのスキーマ詳細。
+- `docs/design/mattermost-extractor.md` — Mattermost extractorの分類・登録フロー。
 - `docs/design/screen-board.md` — メイン画面（カンバンボード）の仕様。
 - `docs/design/screen-close-requests.md` — 対になる画面（クローズ要求一覧、`kind=completion`用）。
 - `docs/adr/complete/mattermost-extractor-registration-flow.md` — 自動登録/人間承認の切り分けを

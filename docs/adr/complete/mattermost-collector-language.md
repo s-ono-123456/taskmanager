@@ -37,4 +37,4 @@ Goで完結でき、Pythonを新規に持ち込む技術的必然性は無い。
 - `docs/design/design.md`（技術スタック、常駐処理の方針）
 - `docs/design/mail-zoom-pipeline.md`（技術スタック節。メール/Zoom分はPython想定のまま、
   Mattermost分はGo採用済み）
-- `docs/design/data-model.md`（「Mattermost extractor」節、Go実装の確定仕様）
+- `docs/design/mattermost-extractor.md`（Go実装の確定仕様）

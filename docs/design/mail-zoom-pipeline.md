@@ -1,7 +1,7 @@
 # メール/Zoom収集・抽出・登録パイプライン（未実装）
 
 > 全体像・背景・リスクは`docs/design/automation-roadmap.md`を参照（本書では重複させない）。
-> Mattermost分は実装済みのため対象外（`docs/design/data-model.md`「Mattermost extractor」節・
+> Mattermost分は実装済みのため対象外（`docs/design/mattermost-extractor.md`・
 > `docs/design/screen-close-requests.md`参照）。
 
 ## 位置づけ
@@ -15,7 +15,7 @@ extractor→registrar→完了候補提示**の確定設計をまとめたもの
 
 トリガー方式は[収集トリガー方式](../adr/complete/collection-trigger.md)で
 採用したcron定期ポーリング（Mattermost分は`internal/mattermost.PollInterval`=10分間隔で
-実装済み、`docs/design/data-model.md`「Mattermost extractor」節参照）。
+実装済み、`docs/design/mattermost-extractor.md`参照）。
 
 - **メール**: IMAPで監視対象フォルダ/ラベルをcronポーリング。フォルダごとに`project_hint`を設定。
 - **Zoom**: cronでZoom API（Server-to-Server OAuth）を使い、終了済み会議一覧を取得。Zoom AI
@@ -78,7 +78,8 @@ Goで実装できる可能性があり、着手時に改めて技術選定を見
 ## 関連ドキュメント
 
 - `docs/design/automation-roadmap.md` — 全体構想・背景・リスク・ロードマップ。
-- `docs/design/data-model.md` — DBスキーマ・ER図、実装済みのMattermost extractorの確定仕様。
+- `docs/design/data-model.md` — DBスキーマ・ER図。
+- `docs/design/mattermost-extractor.md` — 実装済みのMattermost collector/extractorの確定仕様。
 - `docs/design/jira-sync.md` — JIRA同期方針（syncer、未実装）。
 - `docs/design/digest.md` — 日次まとめ（digest、未実装）。
 - `docs/design/screen-close-requests.md` / `docs/design/screen-task-candidates.md` —

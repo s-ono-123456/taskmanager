@@ -5,6 +5,36 @@
 
 ---
 
+## 2026-09-13 / data-model.mdからMattermost extractorの節を独立ファイルへ分離
+
+### やったこと
+
+- 直前にtask-management-automation.mdを機能別に4ファイル（automation-roadmap/mail-zoom-pipeline/
+  jira-sync/digest）へ分割した際、Mattermost実装済み部分だけは新規ファイルを作らず
+  `docs/design/data-model.md`の1節に統合した。ユーザーから「jiraやmail,zoomは別ファイルが
+  あるのにMattermostはどこ行った？」と指摘を受け、他の未実装機能と扱いが非対称
+  （実装済みで最も内容の多いMattermost extractorだけがDBスキーマ専用ドキュメントに
+  埋め込まれていた）になっていたことに気づいた。data-model.md自体も冒頭で「本書はDBスキーマ
+  自体の設計のみを扱う」と明記しており、Mattermost extractor節（AI選定・バッチ化・登録フロー・
+  対象タスクAI推定・保存方針・カーソル管理・原子性等、スキーマ以外の内容を多く含む）は
+  その方針とも矛盾していた。
+- `docs/design/mattermost-extractor.md`を新設し、該当節をdata-model.mdから移動。data-model.md
+  はテーブル一覧・ER図・マイグレーション注意点等、DBスキーマの話題のみに戻した。
+- data-model.mdの新ファイルへの参照を含め、`docs/design/mattermost-extractor.md`「Mattermost
+  extractor」節を指していた全箇所（ADR6本の関連ドキュメント欄、automation-roadmap.md・
+  mail-zoom-pipeline.md・screen-close-requests.md・screen-task-candidates.md・screen-board.md・
+  internal/mattermost/collector.goのコメント）を新ファイルへのリンクに更新した。
+- `sqlc generate`→`go build`で確認。
+
+### 学んだこと
+
+- 「機能別に分ける」という指示を実行する際、実装済み/未実装という軸だけで機能の扱いを
+  変える（未実装機能は独立ファイル、実装済み機能は既存ドキュメントへ統合）と、一覧性が
+  崩れて不自然に見える。ユーザーが「他と同じように」を期待している場合は、実装状況に
+  関わらず機能単位の粒度を揃えるべきだった。
+
+---
+
 ## 2026-09-13 / task-management-automation.mdを機能別に分割
 
 ### やったこと

@@ -31,4 +31,4 @@
 
 ## 関連する設計ドキュメント
 
-- `docs/design/data-model.md`（Mattermost extractorの節）
+- `docs/design/mattermost-extractor.md`（バッチ化の確定仕様）

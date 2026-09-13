@@ -36,7 +36,7 @@ target不明分の受け皿についても、当初「今回は作らない（�
 ## 関連する設計ドキュメント
 
 - `docs/design/mail-zoom-pipeline.md`（登録(Registrar)節、メール/Zoom分の未実装設計）
-- `docs/design/data-model.md`（「Mattermost extractor」節、実装済みの登録フロー）
+- `docs/design/mattermost-extractor.md`（実装済みの登録フロー）
 - `docs/design/screen-close-requests.md`（既存の承認/却下UIパターン）
 - `docs/adr/complete/auto-close-policy.md`（完了判定の自動化可否、対称的な既存決定）
 - `docs/adr/complete/completion-approval-ui.md`（クローズ要求一覧の採用UI、今回流用する構造）

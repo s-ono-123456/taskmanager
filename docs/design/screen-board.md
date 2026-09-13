@@ -116,7 +116,7 @@
     週の所属を選ぶUIは無く、常にバックログで作成される（前述「スイムレーン構成」参照）。
   - 編集モーダルの読み取り専用「元発言」欄（`source_message_id`経由でJOINしたMattermost等の
     元メッセージがあるタスクのみ表示）に、本文に加えて元投稿へのリンク（`permalink_url`が
-    あれば）も表示するようにした（`docs/design/data-model.md`「Mattermost extractor」節参照）。
+    あれば）も表示するようにした（`docs/design/mattermost-extractor.md`参照）。
 
 ## 自動リフレッシュ
 - 45秒間隔で`htmx.ajax('GET', '/', {target:'#board', swap:'outerHTML', select:'#board', ...})`

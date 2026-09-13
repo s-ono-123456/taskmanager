@@ -70,8 +70,8 @@ human_verdict = '')`の行を取得する（`internal/web/kanban.go`の`LoadClos
 
 ## 実データの投入元
 
-Mattermost extractor（`internal/mattermost/`、`docs/design/data-model.md`「Mattermost
-extractor」節参照）が、Mattermostの発言をローカルLLMで分類し、完了報告と判定したものを
+Mattermost extractor（`internal/mattermost/`、`docs/design/mattermost-extractor.md`
+参照）が、Mattermostの発言をローカルLLMで分類し、完了報告と判定したものを
 `kind=completion`の候補として`candidates`へ書き込む。これにより本画面に初めて実データが
 投入されるようになった（それ以前は`internal/taskstore/seed.go`のサンプルデータのみで
 動作確認していた）。メール/Zoom収集は未実装のため、それらのソースからの完了報告候補は
