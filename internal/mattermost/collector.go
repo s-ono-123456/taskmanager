@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -164,6 +165,17 @@ func collectChannel(ctx context.Context, client *Client, llm *LLMClient, db *sql
 		groups[threadKey(p)] = append(groups[threadKey(p)], p)
 	}
 
+	// kind=completionの対象タスク推定(docs/adr/proposals/close-request-target-task-suggestion.md参照)
+	// に使う未クローズタスク一覧。チャンネル(=projectHint)ごとに1回だけ取得しスレッドグループ間で使い回す。
+	openTaskRows, err := q.ListOpenTasksByTarget(ctx, projectHint)
+	if err != nil {
+		return fmt.Errorf("未クローズタスク一覧取得: %w", err)
+	}
+	openTasks := make([]OpenTask, len(openTaskRows))
+	for i, t := range openTaskRows {
+		openTasks[i] = OpenTask{ID: t.ID, Title: t.Title}
+	}
+
 	usernameCache := make(map[string]string)
 	registered, pending := 0, 0
 
@@ -183,7 +195,7 @@ func collectChannel(ctx context.Context, client *Client, llm *LLMClient, db *sql
 			postByID[p.ID] = p
 		}
 
-		results, err := llm.Classify(ctx, transcript, targetIDs, projectHint)
+		results, err := llm.Classify(ctx, transcript, targetIDs, projectHint, openTasks)
 		if err != nil {
 			log.Printf("[mattermost-extractor] channel=%s thread=%s のLLM分類に失敗（スキップ）: %v", channelID, key, err)
 			continue
@@ -197,7 +209,7 @@ func collectChannel(ctx context.Context, client *Client, llm *LLMClient, db *sql
 			if result.Kind == "" || result.Kind == "none" || result.Confidence < MinCandidateConfidence {
 				continue // 破棄(保存しない)。
 			}
-			autoRegistered, err := registerCandidate(ctx, client, db, q, channelID, projectHint, p, result)
+			autoRegistered, err := registerCandidate(ctx, client, db, q, channelID, projectHint, p, result, openTasks)
 			if err != nil {
 				log.Printf("[mattermost-extractor] channel=%s post=%s の登録に失敗: %v", channelID, p.ID, err)
 				continue
@@ -264,6 +276,26 @@ func formatTranscript(posts []Post, usernames map[string]string) string {
 	return b.String()
 }
 
+// suggestedTaskID はLLMが返したrelated_task_id(文字列)を検証しsql.NullInt64へ変換する。
+// openTasksに実在しないid・空文字・数値変換できない値はすべて無効として扱う(LLMの
+// ハルシネーション対策。プロンプトでも一覧外のidを返さないよう指示しているが、
+// ここでも防御的に検証する)。
+func suggestedTaskID(raw string, openTasks []OpenTask) sql.NullInt64 {
+	if raw == "" {
+		return sql.NullInt64{}
+	}
+	id, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil {
+		return sql.NullInt64{}
+	}
+	for _, t := range openTasks {
+		if t.ID == id {
+			return sql.NullInt64{Int64: id, Valid: true}
+		}
+	}
+	return sql.NullInt64{}
+}
+
 // isConfirmedTarget はtargetがjira_a/jira_b/personalのいずれか(自動登録可能な確定値)かを返す。
 // internal/web.isValidTargetと同じ値だが、パッケージをまたいで共有しない方針
 // (internal/mattermostはinternal/webに依存させない)のためここで独自に定義する。
@@ -287,7 +319,7 @@ func stubJiraTransition(jiraKey, action string) {
 // 作られない「孤立レコード」が発生し、MessageExistsBySourceIDの重複防止チェックに
 // より二度と再分類されなくなる不具合があったため(実データで1件発生を確認、
 // docs/work-log.md参照)。
-func registerCandidate(ctx context.Context, client *Client, db *sql.DB, q *taskstore.Queries, channelID, projectHint string, p Post, result ClassifyResult) (autoRegistered bool, err error) {
+func registerCandidate(ctx context.Context, client *Client, db *sql.DB, q *taskstore.Queries, channelID, projectHint string, p Post, result ClassifyResult, openTasks []OpenTask) (autoRegistered bool, err error) {
 	exists, err := q.MessageExistsBySourceID(ctx, taskstore.MessageExistsBySourceIDParams{
 		Source:   "mattermost",
 		SourceID: sql.NullString{String: p.ID, Valid: true},
@@ -333,15 +365,16 @@ func registerCandidate(ctx context.Context, client *Client, db *sql.DB, q *tasks
 	}
 
 	if err := txq.InsertCandidate(ctx, taskstore.InsertCandidateParams{
-		MessageID:      msgID,
-		Kind:           result.Kind,
-		Confidence:     sql.NullFloat64{Float64: result.Confidence, Valid: true},
-		Target:         sql.NullString{String: result.Target, Valid: result.Target != ""},
-		AssigneeRaw:    sql.NullString{String: result.AssigneeRaw, Valid: result.AssigneeRaw != ""},
-		DueDate:        sql.NullString{String: result.DueDate, Valid: result.DueDate != ""},
-		Summary:        sql.NullString{String: result.Summary, Valid: result.Summary != ""},
-		RelatedJiraKey: sql.NullString{String: result.RelatedJiraKey, Valid: result.RelatedJiraKey != ""},
-		HumanVerdict:   verdict,
+		MessageID:       msgID,
+		Kind:            result.Kind,
+		Confidence:      sql.NullFloat64{Float64: result.Confidence, Valid: true},
+		Target:          sql.NullString{String: result.Target, Valid: result.Target != ""},
+		AssigneeRaw:     sql.NullString{String: result.AssigneeRaw, Valid: result.AssigneeRaw != ""},
+		DueDate:         sql.NullString{String: result.DueDate, Valid: result.DueDate != ""},
+		Summary:         sql.NullString{String: result.Summary, Valid: result.Summary != ""},
+		RelatedJiraKey:  sql.NullString{String: result.RelatedJiraKey, Valid: result.RelatedJiraKey != ""},
+		HumanVerdict:    verdict,
+		SuggestedTaskID: suggestedTaskID(result.RelatedTaskID, openTasks),
 	}); err != nil {
 		return false, fmt.Errorf("候補保存: %w", err)
 	}

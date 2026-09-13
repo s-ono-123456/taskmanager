@@ -39,9 +39,12 @@ DB設計は`docs/design/data-model.md`、画面設計は`docs/design/screen-boar
   `filter_target`/`filter_show_untracked`という専用キー名を使う。フォーム自身の
   `target`（タスクの対象）と名前が衝突するのを避けるため。
 - 「クローズ要求一覧」（`candidates.kind=completion`の承認/却下）で、候補に
-  `related_jira_key`が無い場合は対象タスクをLLMが自動推定せず、**画面上の`<select>`で
-  人間が選ぶ**（Mattermost extractorはメッセージ本文にJIRAキーが明示されている場合のみ
-  抽出し、未クローズタスク一覧からの対象推定は行わないため。承認時はサーバー側で自動解決しない）。
+  `related_jira_key`が無い場合、対象タスクは**画面上の`<select>`で人間が選ぶ**
+  （承認時はサーバー側で自動解決しない。JIRAの誤クローズは実害が大きいため、人間の
+  明示的な承認操作は必ず必要）。Mattermost extractorが抽出時にローカルLLMで対象タスクを
+  推定し（`candidates.suggested_task_id`）、その推定が未クローズタスク一覧に含まれていれば
+  `<select>`の初期選択肢として提示するが、あくまでデフォルト値であり人間は自由に選び直せる
+  （`docs/adr/complete/close-request-target-task-suggestion.md`参照）。
 - **優先度(`priority`)は表示専用**（最高/高/中/低、デフォルト「中」）。カード上のバッジ
   表示のみで、並び順（`created_at DESC`固定）・レーン/ステータス構造には一切影響しない。
   編集・新規作成モーダルで変更可能だが、ドラッグ&ドロップ（`/tasks/{id}/move`）では

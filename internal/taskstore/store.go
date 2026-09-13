@@ -90,6 +90,17 @@ func InitSchema(ctx context.Context, db *sql.DB) error {
 			return fmt.Errorf("add permalink_url column: %w", err)
 		}
 	}
+
+	// 既存DB(candidates.suggested_task_id列がまだ無いもの)へのマイグレーション。
+	hasSuggestedTaskID, err := columnExists(ctx, db, "candidates", "suggested_task_id")
+	if err != nil {
+		return fmt.Errorf("check suggested_task_id column: %w", err)
+	}
+	if !hasSuggestedTaskID {
+		if _, err := db.ExecContext(ctx, "ALTER TABLE candidates ADD COLUMN suggested_task_id INTEGER REFERENCES tasks(id)"); err != nil {
+			return fmt.Errorf("add suggested_task_id column: %w", err)
+		}
+	}
 	return nil
 }
 

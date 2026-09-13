@@ -5,6 +5,38 @@
 
 ---
 
+## 2026-09-13 / クローズ要求一覧の対象タスクAI推定を実装
+
+### やったこと
+
+- ユーザーから「クローズ要求一覧で対象タスクが自動的に選択されないのが微妙。AIで判断して
+  デフォルト設定してほしい」との要望があり、grillingスキルで設計を詰めた後
+  （`docs/adr/complete/close-request-target-task-suggestion.md`）、実装した。
+- Mattermost extractorの`Classify`呼び出しに、対象プロジェクトの未クローズタスク一覧
+  （`ListOpenTasksByTarget`、id+titleのみ）をプロンプトへ追加し、`kind=completion`かつ
+  `related_jira_key`が無い候補についてLLMに対象タスクを推定させるようにした
+  （`internal/mattermost/llm.go`の`ClassifyResult.RelatedTaskID`）。結果は`candidates`の
+  新規列`suggested_task_id`に保存し（`internal/mattermost/collector.go`の
+  `suggestedTaskID()`でLLMが一覧に無いidを返した場合の防御的検証も実施）、クローズ要求一覧の
+  `<select>`の初期選択肢として使う（`internal/web/kanban.go`・
+  `internal/web/templates/board.html.tmpl`）。
+- 特別な「(AI推定)」ラベル等は付けず、人間が選んだ場合と見た目上の区別はしない方針とした
+  （ユーザー回答「特に書かなくていい」）。承認操作自体は引き続き人間が行い、
+  `docs/adr/complete/auto-close-policy.md`の「自動クローズしない」方針は維持している。
+- `sqlc generate`→`go build`→`go vet`で確認、さらに一時的なGoテストで実機のllama-swapに
+  対して`Classify`を呼び出し、`related_task_id`が未クローズタスク一覧の中から正しく
+  推定されることを確認した（確認後にテストは削除、既存の検証パターンを踏襲）。
+
+### 学んだこと
+
+- 「AIで判断して」という一見シンプルな要望も、grillingで深掘りすると「いつ推定するか
+  （抽出時 vs 承認画面表示時）」「LLM呼び出しか軽量ヒューリスティックか」「誤クローズ対策
+  としてのUI表現」等、複数の独立した設計判断を含んでいた。既存のextractorパイプライン
+  （スレッド単位で1回LLM呼び出し）に相乗りできる設計（抽出時にまとめて推定）を選んだことで、
+  画面表示のたびに追加コストが発生しない実装にできた。
+
+---
+
 ## 2026-09-13 / Mattermost extractorの孤立メッセージ不具合を修正（トランザクション化）
 
 ### やったこと

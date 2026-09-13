@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -58,6 +59,16 @@ type ClassifyResult struct {
 	DueDate        string  `json:"due_date"`
 	Summary        string  `json:"summary"`
 	RelatedJiraKey string  `json:"related_jira_key"`
+	// RelatedTaskID: kind=completionでRelatedJiraKeyが空の場合に、OpenTaskで渡した
+	// 一覧の中から対象タスクを一意に推定できればそのid(文字列)、確信が持てなければ空文字
+	// (docs/adr/proposals/close-request-target-task-suggestion.md参照)。
+	RelatedTaskID string `json:"related_task_id"`
+}
+
+// OpenTask はClassifyに渡す「未クローズタスク一覧」1件分(対象タスク推定の手がかり)。
+type OpenTask struct {
+	ID    int64
+	Title string
 }
 
 type classifyResponseBody struct {
@@ -73,21 +84,36 @@ const MinCandidateConfidence = 0.3
 // projectHintはそのチャンネルに設定されたtarget(jira_a/jira_b/personal)の手がかりとして
 // プロンプトに含める(本文の内容と矛盾する場合は本文を優先させる、
 // docs/design/task-management-automation.md「抽出・分類」節の方針を踏襲)。
-func (c *LLMClient) Classify(ctx context.Context, threadTranscript string, targetPostIDs []string, projectHint string) ([]ClassifyResult, error) {
+// openTasksはprojectHintに紐づく未クローズタスク一覧で、kind=completionと判定した投稿の
+// 対象タスク推定(RelatedTaskID)の手がかりとして渡す
+// (docs/adr/proposals/close-request-target-task-suggestion.md参照)。
+func (c *LLMClient) Classify(ctx context.Context, threadTranscript string, targetPostIDs []string, projectHint string, openTasks []OpenTask) ([]ClassifyResult, error) {
 	system := `あなたはMattermostの発言を分類するアシスタントです。渡されたスレッドの文脈を踏まえ、
 指定された投稿IDそれぞれについて、次のJSON形式で厳密に回答してください（説明文は不要、JSONのみ）:
 {"results":[{"post_id":"...","kind":"task|completion|none","confidence":0.0から1.0,
 "target":"jira_a|jira_b|personal|unknown","assignee_raw":"","due_date":"YYYY-MM-DD or 空文字",
-"summary":"","related_jira_key":"kind=completionでJIRAキーが本文に明示されている場合のみ、無ければ空文字"}]}
+"summary":"","related_jira_key":"kind=completionでJIRAキーが本文に明示されている場合のみ、無ければ空文字",
+"related_task_id":"kind=completionでrelated_jira_keyが空の場合のみ、open_tasksの中から対象を
+一意に推定できればそのid、確信が持てなければ空文字"}]}
 
 kind=taskは新しい依頼・やるべきことの発生、kind=completionは既存作業の完了報告、
 どちらでもなければkind=noneとしてください。targetはchannel_hintを手がかりにしてよいですが、
 本文の内容と矛盾する場合は本文を優先し、確信が持てなければunknownにしてください。
-断定できない項目は空文字のままにし、推測で埋めないでください。`
+断定できない項目は空文字のままにし、推測で埋めないでください。related_task_idはopen_tasksに
+列挙されていないidを返してはいけません。`
+
+	openTasksText := "（未クローズタスクなし）"
+	if len(openTasks) > 0 {
+		var b strings.Builder
+		for _, t := range openTasks {
+			fmt.Fprintf(&b, "id=%d: %s\n", t.ID, t.Title)
+		}
+		openTasksText = b.String()
+	}
 
 	user := fmt.Sprintf(
-		"channel_hint(target): %s\n\n--- スレッド全文(時系列) ---\n%s\n\n--- 分類対象の投稿ID ---\n%s",
-		projectHint, threadTranscript, joinIDs(targetPostIDs),
+		"channel_hint(target): %s\n\n--- スレッド全文(時系列) ---\n%s\n\n--- 分類対象の投稿ID ---\n%s\n\n--- open_tasks(%sの未クローズタスク一覧) ---\n%s",
+		projectHint, threadTranscript, joinIDs(targetPostIDs), projectHint, openTasksText,
 	)
 
 	reqBody := chatCompletionRequest{

@@ -229,21 +229,25 @@ type CloseRequest struct {
 	// OpenTasks はRelatedJiraKeyが空(対象タスクを一意に特定できない)の場合のみ、
 	// 選択肢として使う候補タスク一覧。
 	OpenTasks []OpenTaskOption
+	// SuggestedTaskID はMattermost extractorがLLMで推定した対象タスクid(0なら推定無し)。
+	// <select>の初期選択に使う(docs/adr/proposals/close-request-target-task-suggestion.md参照)。
+	SuggestedTaskID int64
 }
 
 func closeRequestFromRow(row taskstore.ListPendingCompletionCandidatesRow) CloseRequest {
 	return CloseRequest{
-		ID:             row.ID,
-		Summary:        row.Summary.String,
-		Target:         row.Target.String,
-		Confidence:     row.Confidence.Float64,
-		RelatedJiraKey: row.RelatedJiraKey.String,
-		MsgSource:      row.MsgSource.String,
-		MsgChannel:     row.MsgChannel.String,
-		MsgAuthor:      row.MsgAuthor.String,
-		MsgText:        row.MsgText.String,
-		MsgReceivedAt:  row.MsgReceivedAt.String,
-		MsgURL:         row.MsgUrl.String,
+		ID:              row.ID,
+		Summary:         row.Summary.String,
+		Target:          row.Target.String,
+		Confidence:      row.Confidence.Float64,
+		RelatedJiraKey:  row.RelatedJiraKey.String,
+		MsgSource:       row.MsgSource.String,
+		MsgChannel:      row.MsgChannel.String,
+		MsgAuthor:       row.MsgAuthor.String,
+		MsgText:         row.MsgText.String,
+		MsgReceivedAt:   row.MsgReceivedAt.String,
+		MsgURL:          row.MsgUrl.String,
+		SuggestedTaskID: row.SuggestedTaskID.Int64,
 	}
 }
 

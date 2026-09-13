@@ -8,7 +8,7 @@
 | テーブル | 役割 | 主な列 |
 |---|---|---|
 | `messages` | Mattermost extractorがタスク化・候補化したメッセージのみを保持する（ノイズと判定された投稿は保存しない。`docs/adr/complete/mattermost-message-retention.md`参照）＋seed.goの固定サンプル | `source`(mattermost/email/zoom), `channel_or_meeting`, `author`, `text`, `received_at`, `project_hint`, `permalink_url`(元投稿URL、nullable) |
-| `candidates` | メッセージから抽出したタスク/完了候補。`kind=task`はMattermost extractorが分類した新規タスク候補（`target`確定分は自動的に`tasks`へ登録され`human_verdict='auto_registered'`が設定される。不明分は「タスク候補一覧」画面で人間が承認/却下）、`kind=completion`は完了報告候補（「クローズ要求一覧」画面が参照） | `kind`(task/completion), `confidence`, `target`, `assignee_raw`, `due_date`, `summary`, `related_jira_key`, `human_verdict`(correct/false_positive/auto_registered等) |
+| `candidates` | メッセージから抽出したタスク/完了候補。`kind=task`はMattermost extractorが分類した新規タスク候補（`target`確定分は自動的に`tasks`へ登録され`human_verdict='auto_registered'`が設定される。不明分は「タスク候補一覧」画面で人間が承認/却下）、`kind=completion`は完了報告候補（「クローズ要求一覧」画面が参照。`related_jira_key`が無い場合、`suggested_task_id`にAI推定の対象タスクが入り`<select>`の初期選択肢になる。`docs/adr/complete/close-request-target-task-suggestion.md`参照） | `kind`(task/completion), `confidence`, `target`, `assignee_raw`, `due_date`, `summary`, `related_jira_key`, `human_verdict`(correct/false_positive/auto_registered等), `suggested_task_id`(nullable, FK→tasks.id) |
 | `tasks` | ダッシュボードが実際に読み書きする本体 | `title`, `description`, `target`(jira_a/jira_b/personal), `status`(todo/in_progress/reviewing/done), `jira_key`, `created_at`, `closed_at`, `last_synced_at`, `tracked`(0/1), `due_date`(YYYY-MM-DD、nullable), `cycle_start_date`(所属週の月曜日、YYYY-MM-DD、nullable。NULL=バックログ), `priority`(highest/high/medium/low、デフォルトmedium) |
 | `user_map` | 発言者⇔JIRAアカウントの対応（本パイロットでは表示画面からは未使用） | `source`, `source_user_id`, `jira_account_id`, `display_name` |
 | `mattermost_channel_state` | Mattermost extractorがチャンネルごとにどこまで取得済みかを保持する（`messages`テーブルへの依存を無くしたカーソル管理、後述「Mattermost extractor」節参照） | `channel_id`(PK), `last_processed_at` |
@@ -49,6 +49,7 @@ erDiagram
         text summary
         string related_jira_key "nullable(completion用)"
         string human_verdict "nullable(correct/false_positive/missed)"
+        int suggested_task_id FK "nullable(completion用、AI推定の対象タスク)"
     }
 
     TASKS {

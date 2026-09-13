@@ -409,7 +409,7 @@
               class="rounded-md border-slate-300 dark:border-slate-600 dark:bg-slate-700 text-sm py-1 pl-2 pr-7 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
         <option value="">対象タスクを選択</option>
         {{range $opt := $req.OpenTasks}}
-          <option value="{{$opt.ID}}">{{$opt.Title}}</option>
+          <option value="{{$opt.ID}}" {{if eq $opt.ID $req.SuggestedTaskID}}selected{{end}}>{{$opt.Title}}</option>
         {{end}}
       </select>
       {{end}}

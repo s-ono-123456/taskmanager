@@ -17,22 +17,41 @@
 `ListPendingCompletionCandidates`で`kind='completion' AND (human_verdict IS NULL OR
 human_verdict = '')`の行を取得する（`internal/web/kanban.go`の`LoadCloseRequests()`）。
 `related_jira_key`が空の候補には、`target`が一致し`status != 'done' AND tracked = 1`の
-タスク一覧（`ListOpenTasksByTarget`）を選択肢として付加する。
+タスク一覧（`ListOpenTasksByTarget`）を選択肢として付加する。`candidates.suggested_task_id`
+（Mattermost extractorが抽出時にローカルLLMで推定した対象タスク、下記「対象タスクのAI推定」
+参照）がこの一覧に含まれていれば、`<select>`の初期選択肢として提示する。
 
 ## 承認・却下の業務ルール（`handleApproveCandidate`/`handleRejectCandidate`）
 
 - **承認（`related_jira_key`あり）**: サーバー側で`GetTaskByJiraKey`により対象タスクを
   自動解決する。見つからなければエラートースト。
 - **承認（`related_jira_key`なし）**: フォームの`task_id`（画面上の`<select>`でユーザーが
-  選んだタスクID）を使う。未選択ならエラートースト（Mattermost extractorはメッセージ本文に
-  JIRAキーが明示されている場合のみ`related_jira_key`を抽出し、未クローズタスク一覧からの
-  対象推定までは行わないため、人間が選ぶ形で代替している）。
+  選んだタスクID）を使う。未選択ならエラートースト。`<select>`の初期値はAI推定
+  （下記「対象タスクのAI推定」参照）だが、あくまでデフォルト値であり人間が変更・確認した上で
+  承認操作を行う（自動クローズはしない、`docs/adr/complete/auto-close-policy.md`参照）。
 - **承認の効果**: 対象タスクを`status='done'`に更新し、`closedAtForTransition`で`closed_at`
   を設定（`closeTask()`関数、`edit`/`move`ハンドラと共通ロジック）。JIRA連携タスクなら
   `stubJiraTransition(jiraKey, "close_via_completion_candidate")`を呼ぶ（実通信なし）。
   `candidates.human_verdict`を`'correct'`に更新する。
 - **却下の効果**: `candidates.human_verdict`を`'false_positive'`に更新するのみ。対象タスクは
   一切変更しない。
+
+## 対象タスクのAI推定
+
+`candidates.suggested_task_id`（nullable、`tasks.id`参照）は、Mattermost extractorが投稿を
+抽出・分類する時点（`internal/mattermost/collector.go`の`collectChannel`）でローカルLLMに
+推定させ書き込む。`related_jira_key`が無い`kind=completion`の候補について、`channel_id`に
+対応する`project_hint`の未クローズタスク一覧（`ListOpenTasksByTarget`、id+titleのみ）を
+スレッド全文とあわせて同じ`Classify`呼び出しのプロンプトに渡し、対象タスクを一意に推定
+できた場合のみそのidを返させる（`internal/mattermost/llm.go`）。確信が持てない場合は
+空文字を返させ、`suggested_task_id`はNULLのままになる。LLMが一覧に無いidを返した場合は
+`internal/mattermost/collector.go`の`suggestedTaskID()`で無効値として破棄する
+（ハルシネーション対策）。
+
+推定はあくまで`<select>`の初期選択状態を提案するのみで、承認操作自体は引き続き人間が行う
+（自動クローズ方針は変更しない）。特別なラベル表示等は行わず、人間が選んだ場合と見た目上の
+区別はしない。既存の未承認候補への遡及適用（バックフィル）は行わない。
+詳細な検討経緯は`docs/adr/complete/close-request-target-task-suggestion.md`参照。
 
 ## 画面の更新方式
 

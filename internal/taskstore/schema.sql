@@ -36,7 +36,10 @@ CREATE TABLE IF NOT EXISTS candidates (
     due_date TEXT,
     summary TEXT,
     related_jira_key TEXT,
-    human_verdict TEXT                     -- correct / false_positive / missed
+    human_verdict TEXT,                    -- correct / false_positive / missed
+    suggested_task_id INTEGER REFERENCES tasks(id) -- kind=completionでrelated_jira_keyが
+                                            -- 無い場合にLLMが推定した対象タスク(nullable、
+                                            -- docs/adr/proposals/close-request-target-task-suggestion.md参照)
 );
 
 CREATE TABLE IF NOT EXISTS tasks (

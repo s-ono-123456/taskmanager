@@ -72,8 +72,8 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id;
 
 -- name: InsertCandidate :exec
-INSERT INTO candidates (message_id, kind, confidence, target, assignee_raw, jira_account_id, due_date, summary, related_jira_key, human_verdict)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+INSERT INTO candidates (message_id, kind, confidence, target, assignee_raw, jira_account_id, due_date, summary, related_jira_key, human_verdict, suggested_task_id)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: InsertUserMap :exec
 INSERT INTO user_map (source, source_user_id, jira_account_id, display_name)
