@@ -78,83 +78,22 @@ C3（ダッシュボード内クローズ要求一覧）の構成。当初はC2�
 承認）を採用していたが、2026-09-13にC3へ変更した。日次まとめ（digest）は新規登録・対象不明の
 タスク候補のみを扱い、クローズ候補の承認フローはdigestから切り離されている。
 
-## データモデル（ER図、SQLite）
+## データモデル
 
-個人タスクストア（[個人タスクの格納先](../adr/complete/personal-task-store.md)で
-採用）の実体もここから育てる。
+DBスキーマ・ER図は`docs/design/data-model.md`を参照（パイロット実装の実スキーマと本構想の
+データモデルは同一であり、二重に保守しない）。個人タスクストア
+（[個人タスクの格納先](../adr/complete/personal-task-store.md)で採用）の実体は`tasks`
+テーブルからここまで育てたもの。
 
-```mermaid
-erDiagram
-    MESSAGES ||--o{ CANDIDATES : "1メッセージから複数候補を抽出しうる"
-    TASKS ||--o| CANDIDATES : "kind=taskが承認されて生成"
-    TASKS ||--o{ CANDIDATES : "kind=completionが完了対象として参照"
-    USER_MAP ||--o{ CANDIDATES : "assignee_rawの解決に参照"
+以下は、まだ実装されていないcollector/extractor/registrar/digestが動く前提での、上記
+データモデルの使われ方（スキーマ自体の定義はdata-model.mdを参照、ここでは重複させない）。
 
-    MESSAGES {
-        int id PK
-        string source "mattermost/email/zoom"
-        string source_id
-        string channel_or_meeting
-        string author
-        text text
-        datetime received_at
-        string thread_id
-        string project_hint "jira_a/jira_b/personal/unknown"
-    }
-
-    CANDIDATES {
-        int id PK
-        int message_id FK
-        string kind "task/completion"
-        float confidence
-        string target "jira_a/jira_b/personal/unknown"
-        string assignee_raw
-        string jira_account_id "nullable"
-        date due_date "nullable"
-        text summary
-        string related_jira_key "nullable(completion用)"
-        string human_verdict "nullable(correct/false_positive/missed)"
-    }
-
-    TASKS {
-        int id PK
-        int source_message_id FK
-        string title
-        text description
-        string target "jira_a/jira_b/personal"
-        string status "todo/in_progress/reviewing/done"
-        string jira_key "nullable(個人タスクはNULL)"
-        datetime created_at
-        datetime closed_at "nullable"
-        datetime last_synced_at "nullable(JIRA連携タスクのみ、syncer更新時刻)"
-        boolean tracked "default true。falseで画面非表示・同期対象外"
-        date due_date "nullable。期限"
-    }
-
-    USER_MAP {
-        string source PK
-        string source_user_id PK
-        string jira_account_id
-        string display_name
-    }
-```
-
-`tasks`テーブルのスキーマ・実装は`docs/design/design.md`（パイロット実装）の
-`internal/taskstore/schema.sql`が正。本ERはそれと一致させてある。
-
-- `messages.project_hint`は収集元の設定（`project_routing`、後述）から機械的に付与する
-  「対象プロジェクトの手がかり」。抽出時にLLMへ渡すコンテキストとして使う。
-- `tasks.jira_key`はJIRA起票済みなら値あり、個人タスクはNULLのまま自前ストアの実体となる。
+- `messages.project_hint`は収集元の設定（`project_routing`、後述「収集」参照）から機械的に
+  付与する「対象プロジェクトの手がかり」。抽出時にLLMへ渡すコンテキストとして使う。
 - `user_map`未整備の担当者はassignee未設定で登録し、日次まとめで人間に確認する。
-- `project_routing`（監視対象チャンネル/メールフォルダ/Zoom会議シリーズ名 → `project_hint`の
-  マッピング）はDBではなく設定ファイルで管理するため、ER図には含めていない。
-- `tasks.status`は[タスクの進捗管理粒度](../adr/complete/status-granularity.md)の
-  採用により`todo`/`in_progress`/`reviewing`/`done`の4値カンバンとし、`tasks.due_date`
-  （期限、nullable）を新設した。本書内で単に「クローズ」と表現している箇所は、実体はこの
-  4値のうち`done`への遷移を指す。
-- `candidates`・`user_map`テーブルはスキーマとしては用意済み（ダッシュボードのパイロット実装
-  にも含まれる）だが、collector/extractorが未実装のため、現時点ではダッシュボード側からは
-  未使用（器のみ）。
+- 本書内で単に「クローズ」と表現している箇所は、`tasks.status`
+  （[タスクの進捗管理粒度](../adr/complete/status-granularity.md)で採用した4値カンバン）
+  のうち`done`への遷移を指す。
 
 ## データの実体・同期方針
 
@@ -325,5 +264,6 @@ Python（リポジトリの既存方針どおりルートの`.venv`/uv環境を�
 
 - `docs/adr/proposals/`・`docs/adr/complete/` — 本書の各設計判断がなぜそうなったか（案の比較・
   採用理由）を論点ごとに記録したADR（本書の各所からリンクしている個別ファイル参照）。
+- `docs/design/data-model.md` — DBスキーマ・ER図（本書のデータモデルと同一の実装済みスキーマ）。
 - `docs/design/design.md` — 「スキーマとダッシュボードUI」部分のパイロット実装（Go+sqlc+htmx）
   の詳細設計書。

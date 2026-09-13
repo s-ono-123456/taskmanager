@@ -12,6 +12,72 @@
 | `tasks` | ダッシュボードが実際に読み書きする本体 | `title`, `description`, `target`(jira_a/jira_b/personal), `status`(todo/in_progress/reviewing/done), `jira_key`, `created_at`, `closed_at`, `last_synced_at`, `tracked`(0/1), `due_date`(YYYY-MM-DD、nullable) |
 | `user_map` | 発言者⇔JIRAアカウントの対応（本パイロットでは表示画面からは未使用） | `source`, `source_user_id`, `jira_account_id`, `display_name` |
 
+## ER図
+
+`internal/taskstore/schema.sql`（実装）と一致させたテーブル間のリレーション・列定義。
+
+```mermaid
+erDiagram
+    MESSAGES ||--o{ CANDIDATES : "1メッセージから複数候補を抽出しうる"
+    TASKS ||--o| CANDIDATES : "kind=taskが承認されて生成"
+    TASKS ||--o{ CANDIDATES : "kind=completionが完了対象として参照"
+    USER_MAP ||--o{ CANDIDATES : "assignee_rawの解決に参照"
+
+    MESSAGES {
+        int id PK
+        string source "mattermost/email/zoom"
+        string source_id
+        string channel_or_meeting
+        string author
+        text text
+        datetime received_at
+        string thread_id
+        string project_hint "jira_a/jira_b/personal/unknown"
+    }
+
+    CANDIDATES {
+        int id PK
+        int message_id FK
+        string kind "task/completion"
+        float confidence
+        string target "jira_a/jira_b/personal/unknown"
+        string assignee_raw
+        string jira_account_id "nullable"
+        date due_date "nullable"
+        text summary
+        string related_jira_key "nullable(completion用)"
+        string human_verdict "nullable(correct/false_positive/missed)"
+    }
+
+    TASKS {
+        int id PK
+        int source_message_id FK
+        string title
+        text description
+        string target "jira_a/jira_b/personal"
+        string status "todo/in_progress/reviewing/done"
+        string jira_key "nullable(個人タスクはNULL)"
+        datetime created_at
+        datetime closed_at "nullable"
+        datetime last_synced_at "nullable(JIRA連携タスクのみ、syncer更新時刻)"
+        boolean tracked "default true。falseで画面非表示・同期対象外"
+        date due_date "nullable。期限"
+    }
+
+    USER_MAP {
+        string source PK
+        string source_user_id PK
+        string jira_account_id
+        string display_name
+    }
+```
+
+- `messages.project_hint`は収集元の設定（`project_routing`）から機械的に付与する「対象
+  プロジェクトの手がかり」。`project_routing`自体はDBではなく設定ファイルで管理するため、
+  ER図には含めていない（利用方法は`docs/design/task-management-automation.md`の
+  「抽出・分類」参照）。
+- `tasks.jira_key`はJIRA起票済みなら値あり、個人タスクはNULLのまま自前ストアの実体となる。
+
 ## マイグレーション・実装上の注意
 
 - `internal/taskstore/store.go`の`InitSchema()`は起動のたびに呼ばれ、`schema.sql`
@@ -34,4 +100,5 @@
 - `docs/design/screen-board.md` / `docs/design/screen-close-requests.md` — 各画面が
   このデータモデルをどう読み書きするか。
 - `docs/design/task-management-automation.md` — 全体構想（collector/extractor等）における
-  `messages`/`candidates`/`user_map`の位置づけ・ER図。
+  `messages`/`candidates`/`user_map`の使われ方（本書のER図・スキーマ定義は重複させず本書のみに
+  置く）。

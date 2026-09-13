@@ -5,6 +5,36 @@
 
 ---
 
+## 2026-09-13 / data-model.mdとtask-management-automation.mdのER図重複を解消
+
+### やったこと
+
+- ユーザーから「`docs/design/data-model.md`になぜER図が載っていないのか、
+  `docs/design/task-management-automation.md`と内容が重複しているので正しく振り分けて」
+  という指摘を受けた。確認したところ、両ファイルとも同一のDBスキーマ（`messages`/
+  `candidates`/`tasks`/`user_map`）を別の形式（テーブル一覧 vs mermaid ER図）で
+  説明しており、`task-management-automation.md`側のER図は実装済みスキーマ
+  （`internal/taskstore/schema.sql`）と完全に一致するものだった（「本ERはそれと
+  一致させてある」と明記されていた）ため、正真正銘の重複だった。
+- `docs/design/data-model.md`（DB設計）にER図（mermaid）を移設し、テーブル一覧（役割の
+  概要）とER図（列定義・リレーション詳細）の2段構成にした。スキーマ自体に関する
+  補足（`tasks.jira_key`の意味、`project_routing`がER図に含まれない理由）もこちらへ移した。
+- `docs/design/task-management-automation.md`側のER図・スキーマ補足は削除し、
+  `docs/design/data-model.md`への参照に置き換えた。ただし「まだ実装されていない
+  collector/extractor視点でのデータの使われ方」（`project_hint`をLLMへのコンテキストとして
+  使う、`user_map`未整備時の日次まとめでの確認等）はスキーマ定義そのものではなく
+  pipeline固有の振る舞いのため、こちらに残した。
+
+### 学んだこと・注意点
+
+- 「同じ情報を異なる見た目（テーブル vs 図）で書く」ことと「同じ情報を異なるファイルに
+  重複して書く」ことは別問題。前者は1ファイル内なら概要と詳細の使い分けとして妥当だが、
+  後者は今回のように「片方だけ更新されて食い違う」リスクを生む。ADR分割・design分割の
+  作業直後は特に、「このセクションは本当にこのファイル固有の情報か、他のファイルに
+  同じ情報が無いか」を見出し単位で洗い出す確認が要る。
+
+---
+
 ## 2026-09-13 / ADRの「索引ファイル」方式を廃止し、フラットな観点ファイル名に統一
 
 ### やったこと
