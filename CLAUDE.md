@@ -9,9 +9,11 @@ Mattermost/メール/Zoom/JIRA/Claude APIいずれにも接続せず、JIRA連�
 すべて`stubJiraTransition()`によるログ出力のみ。
 
 プロジェクト概要・技術スタック・ディレクトリ構成・実行方法は`README.md`を参照。
-詳細な業務仕様・データモデル・画面仕様は`docs/design/design.md`を参照。
+詳細設計は`docs/design/`配下に分割している: 全体方針は`docs/design/design.md`、
+DB設計は`docs/design/data-model.md`、画面設計は`docs/design/screen-board.md`
+（カンバンボード）・`docs/design/screen-close-requests.md`（クローズ要求一覧）を参照。
 
-## 誤解しやすい業務ルール（詳細は`docs/design/design.md`参照）
+## 誤解しやすい業務ルール（詳細は`docs/design/screen-board.md`・`docs/design/screen-close-requests.md`参照）
 
 - **完了レーンは直近7日以内に完了(`closed_at`)したタスクのみ表示**する
   （`DoneLaneWindowDays`）。7日を超えても データは残り続け、
@@ -39,9 +41,12 @@ Mattermost/メール/Zoom/JIRA/Claude APIいずれにも接続せず、JIRA連�
 
 - `README.md`（本リポジトリ内） — プロジェクト概要・技術スタック・ディレクトリ構成・
   実行方法。
-- `docs/design/design.md`（本リポジトリ内） — データモデル・画面仕様・ルート一覧・
-  デプロイ構成・既知の制限を網羅した詳細設計書。実装を変更する際は必ず参照し、
+- `docs/design/design.md`（本リポジトリ内） — 全体方針（位置づけ・技術スタック・
+  ルート一覧の索引・デプロイ構成・既知の制限）。実装を変更する際は必ず参照し、
   変更があれば追記すること。
+- `docs/design/data-model.md`（本リポジトリ内） — DB設計（テーブル定義・マイグレーション）。
+- `docs/design/screen-board.md`（本リポジトリ内） — 画面設計: カンバンボード画面。
+- `docs/design/screen-close-requests.md`（本リポジトリ内） — 画面設計: クローズ要求一覧画面。
 - `docs/adr/proposals/task-management-automation.md`（本リポジトリ内、索引） — 全体構想の
   ADR。意思決定の経緯（案の比較・採用理由）を論点ごとのファイルに分割して記録している。
 - `docs/design/task-management-automation.md`（本リポジトリ内） — 全体構想のうち、まだ

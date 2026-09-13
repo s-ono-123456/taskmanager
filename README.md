@@ -44,7 +44,10 @@ internal/web/                  # HTTPハンドラ・業務ロジック
   templates/board.html.tmpl     # 唯一のテンプレート(html/template、go:embed)
 static/htmx.min.js             # htmx本体(vendor同梱、CDN不使用)
 static/board.js                # ボード画面のJS(board.html.tmplから分離)
-docs/design/design.md          # 詳細設計書（データモデル・画面仕様・ルート一覧を網羅）
+docs/design/design.md          # 全体方針（位置づけ・技術スタック・ルート一覧の索引等）
+docs/design/data-model.md      # DB設計
+docs/design/screen-board.md    # 画面設計: カンバンボード
+docs/design/screen-close-requests.md  # 画面設計: クローズ要求一覧
 ```
 
 ## 実行方法
@@ -75,8 +78,11 @@ docs/design/design.md          # 詳細設計書（データモデル・画面�
 
 ## 関連ドキュメント
 
-- `docs/design/design.md` — データモデル・画面仕様・ルート一覧・デプロイ構成・既知の制限を
-  網羅した詳細設計書。実装を変更する際は必ず参照すること。
+- `docs/design/design.md` — 全体方針（位置づけ・技術スタック・ルート一覧の索引・デプロイ構成・
+  既知の制限）。実装を変更する際は必ず参照すること。
+- `docs/design/data-model.md` — DB設計（テーブル定義・マイグレーション）。
+- `docs/design/screen-board.md` — 画面設計: カンバンボード画面。
+- `docs/design/screen-close-requests.md` — 画面設計: クローズ要求一覧画面。
 - `docs/adr/proposals/task-management-automation.md`（索引） — 全体構想のADR。意思決定の
   経緯（案の比較・採用理由）を論点ごとのファイルに分割して記録している。
 - `docs/design/task-management-automation.md` — 全体構想のうち、まだ未実装の
