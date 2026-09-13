@@ -5,6 +5,52 @@
 
 ---
 
+## 2026-09-13 / Mattermost extractorの孤立メッセージ不具合を修正（トランザクション化）
+
+### やったこと
+
+- 本番投入後、ユーザーから「特定の投稿がタスク候補一覧に出てこない」との報告があり調査した。
+  実DB（`/docker/task-dashboard/data/task_dashboard.db`）を一時的な読み取り専用sqlite3
+  コンテナ（`keinos/sqlite3`）で確認したところ、`messages`テーブルにid=17として投稿は
+  保存されているが、対応する`candidates`レコードが存在しない「孤立レコード」だった。
+  `docker logs`にはこの投稿に関するエラーは一切出ておらず、`received_at`が現在のコンテナ
+  起動時刻より前だったことから、本番投入前にホスト上で直接バイナリを動かして検証していた
+  際（24時間分のバックログ処理に5分以上かかり、完了を待たずにkillした回）に、
+  `registerCandidate`内の`InsertMessage`成功後・`InsertCandidate`実行前後でプロセスが
+  中断され孤立したものと特定した。
+- 原因: `internal/mattermost/collector.go`の`registerCandidate`が
+  `InsertMessage`→`InsertCandidate`→(自動登録時)`CreateTask`を別々のクエリとして順に
+  実行しており、原子性が無かった。さらに`MessageExistsBySourceID`による重複防止チェックが
+  あるため、一度孤立したメッセージは再ポーリングされても「既存」と判定され、永久に
+  候補化されないことも判明した。
+- 対応: ユーザーに2案（1: この1件だけ手動救済／2: 恒久対応としてトランザクション化）を
+  提示し、「2」（恒久対応）を選択された。`registerCandidate`に`db *sql.DB`を渡すよう
+  `StartCollectorLoop`→`runOnce`→`collectChannel`の各シグネチャを変更し、
+  `InsertMessage`・`InsertCandidate`・`CreateTask`を`db.BeginTx`+`q.WithTx(tx)`で
+  1トランザクションにまとめた（`internal/taskstore/seed.go`の`Seed`関数と同じ既存パターンを
+  踏襲）。パーマリンク解決（HTTP呼び出し）と重複確認はトランザクション外のまま維持した。
+- `sqlc generate`→`go build`→`go vet`で確認済み（エラーなし）。
+
+### 学んだこと
+
+- 複数のDB書き込みを含む処理は、検証目的の一時的な直接実行であっても、中断（kill）される
+  前提で原子性を最初から考慮すべきだった。「まずcollectorのみ実装→後でextractorへ拡張」
+  という段階的な進め方自体は妥当だったが、拡張時に`InsertMessage`+`InsertCandidate`を
+  分けて実装した際、失敗時の一貫性まで検討できていなかった。
+- 孤立レコードが発生すると、重複防止チェック（`MessageExistsBySourceID`）が「安全装置」
+  ではなく「一度失敗すると永久に再試行されなくなる罠」として働いてしまう点は、実データで
+  実際に踏むまで気づけなかった。冪等性のためのチェックを入れる際は、「途中失敗からの
+  リカバリ経路」も併せて設計する必要がある。
+
+### 未解決事項
+
+- 実データで発見した孤立メッセージ（message.id=17、本文「@sample タスク一覧の画面を
+  作成しておいて」、project_hint=jira_b、channel=mj1wkdmed3yrfb4d8hetiexkko）自体の
+  手動救済はまだ未対応。ユーザーに確認予定（候補として救済するか、タスクとして直接
+  登録するか）。
+
+---
+
 ## 2026-09-13 / Mattermost extractor（ローカルLLMによる取得時タスク化）を実装
 
 ### やったこと

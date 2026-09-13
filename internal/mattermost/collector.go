@@ -109,7 +109,7 @@ func StartCollectorLoop(ctx context.Context, db *sql.DB, cfg Config) {
 	q := taskstore.New(db)
 
 	go func() {
-		runOnce(ctx, client, llm, q, cfg)
+		runOnce(ctx, client, llm, db, q, cfg)
 
 		ticker := time.NewTicker(PollInterval)
 		defer ticker.Stop()
@@ -118,7 +118,7 @@ func StartCollectorLoop(ctx context.Context, db *sql.DB, cfg Config) {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				runOnce(ctx, client, llm, q, cfg)
+				runOnce(ctx, client, llm, db, q, cfg)
 			}
 		}
 	}()
@@ -126,9 +126,9 @@ func StartCollectorLoop(ctx context.Context, db *sql.DB, cfg Config) {
 
 // runOnce は設定済みチャンネルごとに、新着投稿の取得→分類→登録/保留を行う。
 // チャンネル単位でエラーが起きても他のチャンネルの処理は継続する。
-func runOnce(ctx context.Context, client *Client, llm *LLMClient, q *taskstore.Queries, cfg Config) {
+func runOnce(ctx context.Context, client *Client, llm *LLMClient, db *sql.DB, q *taskstore.Queries, cfg Config) {
 	for channelID, projectHint := range cfg.ChannelRoutes {
-		if err := collectChannel(ctx, client, llm, q, channelID, projectHint); err != nil {
+		if err := collectChannel(ctx, client, llm, db, q, channelID, projectHint); err != nil {
 			log.Printf("[mattermost-extractor] channel=%s エラー: %v", channelID, err)
 		}
 	}
@@ -137,7 +137,7 @@ func runOnce(ctx context.Context, client *Client, llm *LLMClient, q *taskstore.Q
 // collectChannel は1チャンネル分の「取得→スレッド単位でグループ化→分類→登録/破棄」を行う
 // (docs/adr/proposals/mattermost-extractor-batching.md参照)。GPU競合の回避は行わない
 // (docs/adr/proposals/mattermost-extractor-llm-choice.md参照、許容する方針)。
-func collectChannel(ctx context.Context, client *Client, llm *LLMClient, q *taskstore.Queries, channelID, projectHint string) error {
+func collectChannel(ctx context.Context, client *Client, llm *LLMClient, db *sql.DB, q *taskstore.Queries, channelID, projectHint string) error {
 	sinceMS, err := cursorForChannel(ctx, q, channelID)
 	if err != nil {
 		return fmt.Errorf("cursor取得: %w", err)
@@ -197,7 +197,7 @@ func collectChannel(ctx context.Context, client *Client, llm *LLMClient, q *task
 			if result.Kind == "" || result.Kind == "none" || result.Confidence < MinCandidateConfidence {
 				continue // 破棄(保存しない)。
 			}
-			autoRegistered, err := registerCandidate(ctx, client, q, channelID, projectHint, p, result)
+			autoRegistered, err := registerCandidate(ctx, client, db, q, channelID, projectHint, p, result)
 			if err != nil {
 				log.Printf("[mattermost-extractor] channel=%s post=%s の登録に失敗: %v", channelID, p.ID, err)
 				continue
@@ -281,7 +281,13 @@ func stubJiraTransition(jiraKey, action string) {
 // tasksへ登録し(戻り値true)、それ以外(kind=completion、またはkind=taskでtarget未確定)は
 // candidatesに保留のまま残す(戻り値false。既存の「クローズ要求一覧」・新設の
 // 「タスク候補一覧」がそれぞれ表示する。docs/adr/proposals/mattermost-extractor-registration-flow.md参照)。
-func registerCandidate(ctx context.Context, client *Client, q *taskstore.Queries, channelID, projectHint string, p Post, result ClassifyResult) (autoRegistered bool, err error) {
+//
+// メッセージ保存・候補保存・(自動登録時の)タスク作成は1トランザクションで行う。
+// 分けて実行すると、途中でプロセスが中断した場合にメッセージだけが保存され候補が
+// 作られない「孤立レコード」が発生し、MessageExistsBySourceIDの重複防止チェックに
+// より二度と再分類されなくなる不具合があったため(実データで1件発生を確認、
+// docs/work-log.md参照)。
+func registerCandidate(ctx context.Context, client *Client, db *sql.DB, q *taskstore.Queries, channelID, projectHint string, p Post, result ClassifyResult) (autoRegistered bool, err error) {
 	exists, err := q.MessageExistsBySourceID(ctx, taskstore.MessageExistsBySourceIDParams{
 		Source:   "mattermost",
 		SourceID: sql.NullString{String: p.ID, Valid: true},
@@ -299,7 +305,14 @@ func registerCandidate(ctx context.Context, client *Client, q *taskstore.Queries
 		permalink = ""
 	}
 
-	msgID, err := q.InsertMessage(ctx, taskstore.InsertMessageParams{
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return false, fmt.Errorf("トランザクション開始: %w", err)
+	}
+	defer tx.Rollback()
+	txq := q.WithTx(tx)
+
+	msgID, err := txq.InsertMessage(ctx, taskstore.InsertMessageParams{
 		Source:           "mattermost",
 		SourceID:         sql.NullString{String: p.ID, Valid: true},
 		ChannelOrMeeting: sql.NullString{String: channelID, Valid: true},
@@ -319,7 +332,7 @@ func registerCandidate(ctx context.Context, client *Client, q *taskstore.Queries
 		verdict = sql.NullString{String: "auto_registered", Valid: true}
 	}
 
-	if err := q.InsertCandidate(ctx, taskstore.InsertCandidateParams{
+	if err := txq.InsertCandidate(ctx, taskstore.InsertCandidateParams{
 		MessageID:      msgID,
 		Kind:           result.Kind,
 		Confidence:     sql.NullFloat64{Float64: result.Confidence, Valid: true},
@@ -334,7 +347,7 @@ func registerCandidate(ctx context.Context, client *Client, q *taskstore.Queries
 	}
 
 	if autoRegister {
-		if _, err := q.CreateTask(ctx, taskstore.CreateTaskParams{
+		if _, err := txq.CreateTask(ctx, taskstore.CreateTaskParams{
 			SourceMessageID: sql.NullInt64{Int64: msgID, Valid: true},
 			Title:           result.Summary,
 			Target:          result.Target,
@@ -346,9 +359,14 @@ func registerCandidate(ctx context.Context, client *Client, q *taskstore.Queries
 		}); err != nil {
 			return false, fmt.Errorf("タスク自動登録: %w", err)
 		}
-		if result.Target == "jira_a" || result.Target == "jira_b" {
-			stubJiraTransition("(未発行)", "create_via_mattermost_extractor")
-		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return false, fmt.Errorf("トランザクションコミット: %w", err)
+	}
+
+	if autoRegister && (result.Target == "jira_a" || result.Target == "jira_b") {
+		stubJiraTransition("(未発行)", "create_via_mattermost_extractor")
 	}
 	return autoRegister, nil
 }
