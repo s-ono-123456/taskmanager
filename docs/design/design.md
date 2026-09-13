@@ -115,7 +115,12 @@
   `MATTERMOST_BOT_TOKEN` / `MATTERMOST_SERVER_URL`（例: `https://mattermost.example.com`） /
   `MATTERMOST_CHANNEL_ROUTES`（例: `channelID1:jira_a,channelID2:jira_b,channelID3:personal`。
   MattermostのチャンネルIDと`project_hint`の対応をカンマ区切りで指定）。実際のトークン値は
-  リポジトリ・ドキュメントに書かず、`compose/docker-compose.yml`等でユーザーが個別に設定する。
+  リポジトリ・ドキュメントに書かない。`compose/docker-compose.yml`は
+  `${MATTERMOST_BOT_TOKEN:-}`のようにDocker Composeの変数展開でこれらを参照しているため、
+  値は**ホスト側のシェル環境変数**（例: `export MATTERMOST_BOT_TOKEN=... && docker compose up -d`）
+  か、**`compose/.env`ファイル**（`docker compose`が自動読み込みする。`.gitignore`で
+  除外済みのためコミットされない）のどちらかに置けばよい。
+
 
 ## 開発時のビルド方法
 
