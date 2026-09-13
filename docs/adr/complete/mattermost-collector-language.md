@@ -1,15 +1,15 @@
 # 論点: Mattermost collectorの実装言語
 
-- 起票: 2026-09-13 / タスク管理自動化構想の一部（`docs/design/task-management-automation.md` 参照）
+- 起票: 2026-09-13 / タスク管理自動化構想の一部（`docs/design/automation-roadmap.md` 参照）
 - 論点: Mattermost collector（`docs/adr/complete/mattermost-collector-scope.md`で決定した
   「収集のみ」スコープ）をGoとPythonのどちらで実装するか。
 - 状態: **採用済み・実装完了（2026-09-13）**
 
 ## 背景
 
-`docs/design/task-management-automation.md`の既存設計はcollector/extractor/registrar全体を
-Python（`requests`でMattermost/JIRA/Zoom API呼び出し、`anthropic` SDKでClaude API呼び出し）で
-実装する想定だった。taskmanagerリポジトリの既存実装（ダッシュボード）はGo + sqlc + htmxのみで、
+当時の設計（現`docs/design/mail-zoom-pipeline.md`「技術スタック」節）はcollector/extractor/
+registrar全体をPython（`requests`でMattermost/JIRA/Zoom API呼び出し、`anthropic` SDKでClaude
+API呼び出し）で実装する想定だった。taskmanagerリポジトリの既存実装（ダッシュボード）はGo + sqlc + htmxのみで、
 Pythonの実行環境は現状このリポジトリに存在しない。
 
 ## 方針案
@@ -35,5 +35,6 @@ Goで完結でき、Pythonを新規に持ち込む技術的必然性は無い。
 ## 関連する設計ドキュメント
 
 - `docs/design/design.md`（技術スタック、常駐処理の方針）
-- `docs/design/task-management-automation.md`（技術スタック節はPython想定のままだが、
-  collector部分についてはGo採用へ更新が必要）
+- `docs/design/mail-zoom-pipeline.md`（技術スタック節。メール/Zoom分はPython想定のまま、
+  Mattermost分はGo採用済み）
+- `docs/design/data-model.md`（「Mattermost extractor」節、Go実装の確定仕様）

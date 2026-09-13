@@ -1,5 +1,5 @@
 -- タスク管理自動化パイロットのDBスキーマ。
--- docs/adr/proposals/task-management-automation.md のデータモデルに対応するSQLiteスキーマ。
+-- docs/design/data-model.md のデータモデルに対応するSQLiteスキーマ。
 -- go:embed でそのまま読み込み、起動時のCREATE TABLE IF NOT EXISTS実行にも使う
 -- (sqlcの型推論と起動時DDLの単一のソース)。
 

@@ -71,9 +71,11 @@ DB設計は`docs/design/data-model.md`、画面設計は`docs/design/screen-boar
 - `docs/adr/proposals/`・`docs/adr/complete/`（本リポジトリ内） — 全体構想のADR。
   意思決定の経緯（案の比較・採用理由）を論点ごとのファイルに分けて記録している
   （実装まで完了したものは`complete/`）。
-- `docs/design/task-management-automation.md`（本リポジトリ内） — 全体構想のうち、まだ
-  未実装のsyncer/registrar（実JIRA通信）/digest（およびメール/Zoom collector）を含む確定設計
-  （データモデル・パイプライン全体像。Mattermost collector兼extractorは実装済み）。
+- `docs/design/automation-roadmap.md`（本リポジトリ内） — タスク管理自動化構想の全体像・
+  背景・リスク・ロードマップ（Mattermost collector兼extractorは実装済み）。
+- `docs/design/mail-zoom-pipeline.md` / `docs/design/jira-sync.md` / `docs/design/digest.md`
+  （本リポジトリ内） — まだ未実装のメール/Zoom collector・extractor・registrar・syncer
+  （実JIRA通信）・digestそれぞれの確定設計。
 - `docs/adr/README.md`（本リポジトリ内） — ADRとdocs/design/の役割分担・ファイル構成の
   運用ルール。
 - `docs/session-context.md` / `docs/task-queue.md` / `docs/work-log.md`（本リポジトリ内） —

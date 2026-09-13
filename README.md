@@ -16,7 +16,7 @@ Mattermost collector兼extractor（`internal/mattermost/`、2026-09-13追加・�
 ドラッグ&ドロップ、優先度バッジ）、週次サイクルの自動繰り越し、クローズ要求一覧、
 タスク候補一覧、Mattermost collector兼extractor（ローカルLLMでの取得時分類・自動タスク登録）。
 
-全体構想（本パイロットが将来どう拡張される想定か）は`docs/design/task-management-automation.md`
+全体構想（本パイロットが将来どう拡張される想定か）は`docs/design/automation-roadmap.md`
 を参照。各設計判断の経緯は`docs/adr/proposals/`・`docs/adr/complete/`配下の論点ファイルを参照。
 
 ## 技術スタック
@@ -109,7 +109,9 @@ docs/design/screen-task-candidates.md # 画面設計: タスク候補一覧
 - `docs/design/screen-task-candidates.md` — 画面設計: タスク候補一覧画面。
 - `docs/adr/proposals/`・`docs/adr/complete/` — 全体構想のADR。意思決定の経緯（案の比較・
   採用理由）を論点ごとのファイルに分けて記録している（実装まで完了したものは`complete/`）。
-- `docs/design/task-management-automation.md` — 全体構想のうち、まだ未実装の
-  syncer/registrar（実JIRA通信）/digest（およびメール/Zoom collector）を含む確定設計
-  （データモデル・パイプライン全体像。Mattermost collector兼extractorは実装済み）。
+- `docs/design/automation-roadmap.md` — タスク管理自動化構想の全体像・背景・リスク・
+  ロードマップ（Mattermost collector兼extractorは実装済み）。
+- `docs/design/mail-zoom-pipeline.md` / `docs/design/jira-sync.md` / `docs/design/digest.md` —
+  まだ未実装のメール/Zoom collector・extractor・registrar・syncer（実JIRA通信）・digest
+  それぞれの確定設計。
 - `docs/work-log.md` — 完了した作業の経緯・学んだこと（Go+sqlc+htmxへの移行判断など）。

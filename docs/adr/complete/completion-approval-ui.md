@@ -1,6 +1,6 @@
 # 論点: 完了候補の承認UI
 
-- 起票: 2026-09-12 / タスク管理自動化構想の一部（`docs/design/task-management-automation.md` 参照）
+- 起票: 2026-09-12 / タスク管理自動化構想の一部（`docs/design/automation-roadmap.md` 参照）
 - 論点: 完了判定(クローズ)は候補提示＋人間承認とする（自動クローズはしない。JIRAの誤クローズは
   気づかれにくく実害が大きいため）。この人間承認をどのUIで行うか。
 - 状態: **採用済み（C3、2026-09-13。C2から変更）**
@@ -43,8 +43,9 @@ C3はダッシュボード側（「クローズ要求一覧」画面、`POST /ca
 
 ## 関連する設計ドキュメント
 
-- `docs/design/task-management-automation.md`（完了候補提示・クローズ、日次まとめの構成。
-  C3採用に伴い更新済み）
+- `docs/design/mail-zoom-pipeline.md`（完了候補提示・クローズ、未実装部分。C3採用に伴い
+  更新済み）
+- `docs/design/digest.md`（日次まとめの構成、C3採用に伴い更新済み）
 - `docs/design/screen-close-requests.md`（「クローズ要求一覧」の業務ルール・ルート一覧。
   C3の実装詳細）
 - `docs/design/design.md`（C3が画面追加先とするダッシュボードWebアプリの全体方針）

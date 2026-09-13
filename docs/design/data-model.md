@@ -84,8 +84,8 @@ erDiagram
 
 - `messages.project_hint`は収集元の設定（`project_routing`）から機械的に付与する「対象
   プロジェクトの手がかり」。`project_routing`自体はDBではなく設定ファイルで管理するため、
-  ER図には含めていない（利用方法は`docs/design/task-management-automation.md`の
-  「抽出・分類」参照）。
+  ER図には含めていない（Mattermost分は環境変数`MATTERMOST_CHANNEL_ROUTES`で代替、下記
+  「Mattermost extractor」節参照。メール/Zoom分は`docs/design/mail-zoom-pipeline.md`参照）。
 - `tasks.jira_key`はJIRA起票済みなら値あり、個人タスクはNULLのまま自前ストアの実体となる。
 
 ## 週次サイクル（Cycles）
@@ -116,6 +116,11 @@ Mattermost APIをポーリングして取得した投稿を**取得時に即座�
 `mattermost-extractor-llm-choice.md`・`mattermost-extractor-registration-flow.md`・
 `mattermost-extractor-batching.md`・`mattermost-message-retention.md`参照）。
 
+- **収集**: `internal/mattermost/collector.go`の常駐goroutineが**10分間隔**
+  （`PollInterval`定数）でポーリングする（トリガー方式の比較検討経緯は
+  `docs/adr/complete/collection-trigger.md`参照）。監視対象チャンネル（複数可）とその
+  `project_hint`（jira_a/jira_b/personal）は環境変数`MATTERMOST_CHANNEL_ROUTES`
+  （例: `chID1:jira_a,chID2:jira_b`）でチャンネルごとに指定する。
 - **AI**: Claude API等の外部LLMには接続せず、このホスト上に既に稼働しているローカルLLM
   （llama-swap、OpenAI互換API）を使う。デフォルトモデルは`qwen3.8-flash-next-q5`、
   環境変数`MATTERMOST_EXTRACTOR_LLM_URL`（既定`http://host.docker.internal:8080`）・
@@ -179,6 +184,6 @@ Mattermost APIをポーリングして取得した投稿を**取得時に即座�
 - `docs/design/design.md` — 全体方針・技術スタック・デプロイ構成。
 - `docs/design/screen-board.md` / `docs/design/screen-close-requests.md` — 各画面が
   このデータモデルをどう読み書きするか。
-- `docs/design/task-management-automation.md` — 全体構想（collector/extractor等）における
-  `messages`/`candidates`/`user_map`の使われ方（本書のER図・スキーマ定義は重複させず本書のみに
-  置く）。
+- `docs/design/automation-roadmap.md` — 全体構想・背景・リスク・ロードマップ。
+- `docs/design/mail-zoom-pipeline.md` — 未実装のメール/Zoom分での`messages`/`candidates`の
+  使われ方（本書のER図・スキーマ定義は重複させず本書のみに置く）。

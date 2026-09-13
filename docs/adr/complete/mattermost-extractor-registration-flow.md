@@ -1,14 +1,14 @@
 # 論点: Mattermost extractorの登録フロー（自動登録 vs 人間承認）
 
-- 起票: 2026-09-13 / タスク管理自動化構想の一部（`docs/design/task-management-automation.md` 参照）
+- 起票: 2026-09-13 / タスク管理自動化構想の一部（`docs/design/automation-roadmap.md` 参照）
 - 論点: AI分類した`kind=task`候補を、どこまで自動でタスク登録し、どこから人間の確認を挟むか。
 - 状態: **採用済み・実装完了（2026-09-13）**
 
 ## 背景
 
-`task-management-automation.md`の既存設計は、`target`が確定した候補は人間承認なしで自動的に
-JIRA起票/個人タスク登録し、`target=unknown`のみ日次まとめ（digest、未実装）で人間に確認させる
-想定だった。完了報告（`kind=completion`）は既に「候補提示＋人間承認」（`auto-close-policy.md`）
+当時の設計（現`docs/design/mail-zoom-pipeline.md`「登録（Registrar）」節）は、`target`が確定した
+候補は人間承認なしで自動的にJIRA起票/個人タスク登録し、`target=unknown`のみ日次まとめ
+（digest、未実装）で人間に確認させる想定だった。完了報告（`kind=completion`）は既に「候補提示＋人間承認」（`auto-close-policy.md`）
 の方式が実装済み（クローズ要求一覧画面）。今回、`kind=task`の新規タスク化を初めて実装するに
 あたり、この既存設計をそのまま踏襲するかどうかを検討した。
 
@@ -35,7 +35,8 @@ target不明分の受け皿についても、当初「今回は作らない（�
 
 ## 関連する設計ドキュメント
 
-- `docs/design/task-management-automation.md`（登録(Registrar)節）
+- `docs/design/mail-zoom-pipeline.md`（登録(Registrar)節、メール/Zoom分の未実装設計）
+- `docs/design/data-model.md`（「Mattermost extractor」節、実装済みの登録フロー）
 - `docs/design/screen-close-requests.md`（既存の承認/却下UIパターン）
 - `docs/adr/complete/auto-close-policy.md`（完了判定の自動化可否、対称的な既存決定）
 - `docs/adr/complete/completion-approval-ui.md`（クローズ要求一覧の採用UI、今回流用する構造）

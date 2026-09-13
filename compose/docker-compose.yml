@@ -1,5 +1,5 @@
 # タスク管理自動化パイロットの管理画面（外部通信は原則なし。唯一の例外はMattermost
-# collector、後述の環境変数参照。全体構想は docs/design/task-management-automation.md 参照）。
+# collector、後述の環境変数参照。全体構想は docs/design/automation-roadmap.md 参照）。
 # 実データ（SQLite）は /docker/task-dashboard/data に置く（git管理下の外に置き、サイズが
 # 大きい・頻繁に変化するデータを本リポジトリに含めないため）。
 services:

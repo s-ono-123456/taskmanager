@@ -1,4 +1,4 @@
-# task-dashboard 設計書（パイロット実装・全体方針）
+# task-dashboard 全体方針
 
 > 本書は**全体方針**（位置づけ・技術スタック・デプロイ構成・ルート一覧の索引・既知の制限）
 > を扱う。**DB設計**（テーブル定義）は`docs/design/data-model.md`、**画面設計**は
@@ -21,7 +21,8 @@
 両方（比較検討の経緯は`docs/adr/complete/mattermost-extractor-*.md`参照）。JIRA自動起票の
 実通信(registrar)・digestは引き続き対象外で未実装。
 まだ実装していない`syncer`/`registrar`（実JIRA通信）/`digest`部分の確定設計は
-`docs/design/task-management-automation.md`にまとめている（本書はダッシュボードUI側のみを
+`docs/design/jira-sync.md`・`docs/design/mail-zoom-pipeline.md`・`docs/design/digest.md`に
+まとめている（全体像は`docs/design/automation-roadmap.md`参照。本書はダッシュボードUI側のみを
 扱い、重複させない）。
 
 **2026-09-12、Python/Flask実装からGo + sqlc + htmxへ全面移行した。** 「軽量さ」（単一バイナリ
@@ -68,73 +69,75 @@
 ```
 
 技術スタック:
+
 - 言語: Go（標準ライブラリの`net/http`（Go 1.22+の`ServeMux`、パスパラメータ対応）+
-  `html/template`）。追加のルーターフレームワークは使わない。
+`html/template`）。追加のルーターフレームワークは使わない。
 - SQL: [sqlc](https://sqlc.dev/)。`internal/taskstore/query.sql`にクエリを書き、
-  型安全なGoコード（`query.sql.go`等）を生成する。SQLとロジックをファイルで完全に分離する
-  ことを最重視している。
+型安全なGoコード（`query.sql.go`等）を生成する。SQLとロジックをファイルで完全に分離する
+ことを最重視している。
 - DBドライバ: `modernc.org/sqlite`（cgo不要の純Go実装）。`CGO_ENABLED=0`でビルドできるため、
-  実行イメージを`distroless/static-debian12`にでき、最終イメージは30MB台まで軽量化できる
-  （旧Python版は`python:3.13-slim`ベースで150〜200MB程度）。SQLiteは複数コネクションからの
-  同時書き込みに弱いため、`internal/taskstore/store.go`の`OpenDB()`で
-  `db.SetMaxOpenConns(1)`により最大コネクション数を1に制限している（Python版の単一
-  コネクション運用と同等の安全性を保つため）。
+実行イメージを`distroless/static-debian12`にでき、最終イメージは30MB台まで軽量化できる
+（旧Python版は`python:3.13-slim`ベースで150〜200MB程度）。SQLiteは複数コネクションからの
+同時書き込みに弱いため、`internal/taskstore/store.go`の`OpenDB()`で
+`db.SetMaxOpenConns(1)`により最大コネクション数を1に制限している（Python版の単一
+コネクション運用と同等の安全性を保つため）。
 - フロントエンド: [htmx](https://htmx.org/)（vendor同梱、`static/htmx.min.js`）+ Tailwind CSS
-  （引き続きCDN読み込み）。JSはドラッグ&ドロップ・モーダル開閉など最小限のみ素のDOM操作で
-  実装。
+（引き続きCDN読み込み）。JSはドラッグ&amp;ドロップ・モーダル開閉など最小限のみ素のDOM操作で
+実装。
 - 開発環境: このリポジトリを触る環境にGo/sqlcがローカルインストールされていない場合、
-  `docker run`経由でビルド・コード生成を行う（後述「開発時のビルド方法」参照）。
+`docker run`経由でビルド・コード生成を行う（後述「開発時のビルド方法」参照）。
 
 ## ルート一覧（`internal/web/handlers.go`）
 
 各ルートの詳細な業務ルールは、対応する画面設計ドキュメント（`docs/design/screen-board.md`・
 `docs/design/screen-close-requests.md`・`docs/design/screen-task-candidates.md`）を参照。
 
-| メソッド/パス | 概要 |
-|---|---|
-| `GET /` | ボード表示。`target`・`show_untracked`をクエリパラメータで受け取る |
-| `POST /tasks/new` | 新規タスク作成（due_date任意、priorityは未指定なら`medium`）。target が jira_a/jira_b の場合はJIRA起票スタブのログのみ出力（実通信なし） |
-| `POST /tasks/{id}/edit` | 編集モーダルからの保存。title/target/status/priorityを検証し更新（due_dateは未入力ならNULLとして保存）。`status`が`done`へ/から変化する際は`closed_at`をその場で設定/クリアする |
-| `POST /tasks/{id}/move` | ドラッグ&ドロップからの状態変更。`status`に加え`cycle`(`this_week`/`backlog`)も受け取り両方を更新する。JIRA連携タスクなら`stubJiraTransition()`を呼ぶ |
-| `POST /tasks/{id}/track` | 「非表示」/「再表示」ボタン。後述の業務ルール参照 |
-| `POST /candidates/{id}/approve` | クローズ要求一覧（kind=completion）の「承認」ボタン |
-| `POST /candidates/{id}/reject` | クローズ要求一覧の「却下」ボタン。`candidates.human_verdict`を`false_positive`にするのみ |
-| `POST /task-candidates/{id}/approve` | タスク候補一覧（kind=task、target不明分）の「承認」ボタン。選ばれたtargetで新規タスクを作成する |
-| `POST /task-candidates/{id}/reject` | タスク候補一覧の「却下」ボタン。`candidates.human_verdict`を`false_positive`にするのみ |
-| `GET /static/` | htmx.min.js等の静的ファイル配信（go:embed） |
+
+| メソッド/パス                              | 概要                                                                                                                        |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| `GET /`                              | ボード表示。`target`・`show_untracked`をクエリパラメータで受け取る                                                                             |
+| `POST /tasks/new`                    | 新規タスク作成（due_date任意、priorityは未指定なら`medium`）。target が jira_a/jira_b の場合はJIRA起票スタブのログのみ出力（実通信なし）                             |
+| `POST /tasks/{id}/edit`              | 編集モーダルからの保存。title/target/status/priorityを検証し更新（due_dateは未入力ならNULLとして保存）。`status`が`done`へ/から変化する際は`closed_at`をその場で設定/クリアする |
+| `POST /tasks/{id}/move`              | ドラッグ&amp;ドロップからの状態変更。`status`に加え`cycle`(`this_week`/`backlog`)も受け取り両方を更新する。JIRA連携タスクなら`stubJiraTransition()`を呼ぶ           |
+| `POST /tasks/{id}/track`             | 「非表示」/「再表示」ボタン。後述の業務ルール参照                                                                                                 |
+| `POST /candidates/{id}/approve`      | クローズ要求一覧（kind=completion）の「承認」ボタン                                                                                         |
+| `POST /candidates/{id}/reject`       | クローズ要求一覧の「却下」ボタン。`candidates.human_verdict`を`false_positive`にするのみ                                                         |
+| `POST /task-candidates/{id}/approve` | タスク候補一覧（kind=task、target不明分）の「承認」ボタン。選ばれたtargetで新規タスクを作成する                                                                |
+| `POST /task-candidates/{id}/reject`  | タスク候補一覧の「却下」ボタン。`candidates.human_verdict`を`false_positive`にするのみ                                                          |
+| `GET /static/`                       | htmx.min.js等の静的ファイル配信（go:embed）                                                                                           |
+
 
 ## デプロイ構成
 
 - `build/Dockerfile`: マルチステージビルド。
   - builderステージ: `golang:1.25-alpine`で`CGO_ENABLED=0 GOOS=linux go build`。
   - 実行ステージ: `gcr.io/distroless/static-debian12`（rootで実行。既存のホスト側ボリューム
-    `/docker/task-dashboard/data`のパーミッションがroot実行前提のため、nonrootタグは
-    使わない）。`templates/`・`static/`はGoバイナリに`go:embed`済みのため、実行ステージへの
-    `COPY`は不要（バイナリ単体をコピーするのみ）。
+  `/docker/task-dashboard/data`のパーミッションがroot実行前提のため、nonrootタグは
+  使わない）。`templates/`・`static/`はGoバイナリに`go:embed`済みのため、実行ステージへの
+  `COPY`は不要（バイナリ単体をコピーするのみ）。
   - 最終イメージサイズは30MB台（旧Python版は150〜200MB程度）。
 - `compose/docker-compose.yml`: サービス名`task-dashboard`。ビルドコンテキストはリポジトリ
-  ルート（`..`）、`build/Dockerfile`参照。ポート`8090:8090`。
-  実データ(SQLite)は`/docker/task-dashboard/data`（gitの外側）にボリュームマウントする
-  （変更なし）。
+ルート（`..`）、`build/Dockerfile`参照。ポート`8090:8090`。
+実データ(SQLite)は`/docker/task-dashboard/data`（gitの外側）にボリュームマウントする
+（変更なし）。
 - 環境変数: `TASK_DASHBOARD_HOST` / `TASK_DASHBOARD_PORT` / `TASK_DASHBOARD_DB_PATH` /
-  `TASK_DASHBOARD_AUTO_SEED`（`1`ならDBが空の場合のみ自動シード実行。実連携を組み込んだら
-  `0`にする想定）。環境変数名・意味はFlask版から変更していない。
+`TASK_DASHBOARD_AUTO_SEED`（`1`ならDBが空の場合のみ自動シード実行。実連携を組み込んだら
+`0`にする想定）。環境変数名・意味はFlask版から変更していない。
 - Mattermost extractor用の環境変数（`MATTERMOST_BOT_TOKEN`が未設定ならcollector/extractorは
-  起動しない）:
-  `MATTERMOST_BOT_TOKEN` / `MATTERMOST_SERVER_URL`（例: `https://mattermost.example.com`） /
-  `MATTERMOST_CHANNEL_ROUTES`（例: `channelID1:jira_a,channelID2:jira_b,channelID3:personal`。
-  MattermostのチャンネルIDと`project_hint`の対応をカンマ区切りで指定） /
-  `MATTERMOST_EXTRACTOR_LLM_URL`（既定`http://host.docker.internal:8080`、このホスト上の
-  ローカルLLM(llama-swap)のURL） / `MATTERMOST_EXTRACTOR_LLM_MODEL`
-  （既定`qwen3.8-flash-next-q5`）。実際のトークン値は
-  リポジトリ・ドキュメントに書かない。`compose/docker-compose.yml`は
-  `${MATTERMOST_BOT_TOKEN:-}`のようにDocker Composeの変数展開でこれらを参照しているため、
-  値は**ホスト側のシェル環境変数**（例: `export MATTERMOST_BOT_TOKEN=... && docker compose up -d`）
-  か、**`compose/.env`ファイル**（`docker compose`が自動読み込みする。`.gitignore`で
-  除外済みのためコミットされない）のどちらかに置けばよい。
-  `extra_hosts: ["host.docker.internal:host-gateway"]`をコンテナに設定しており、
-  コンテナからホスト上のllama-swapへ到達できる。
-
+起動しない）:
+`MATTERMOST_BOT_TOKEN` / `MATTERMOST_SERVER_URL`（例: `https://mattermost.example.com`） /
+`MATTERMOST_CHANNEL_ROUTES`（例: `channelID1:jira_a,channelID2:jira_b,channelID3:personal`。
+MattermostのチャンネルIDと`project_hint`の対応をカンマ区切りで指定） /
+`MATTERMOST_EXTRACTOR_LLM_URL`（既定`http://host.docker.internal:8080`、このホスト上の
+ローカルLLM(llama-swap)のURL） / `MATTERMOST_EXTRACTOR_LLM_MODEL`
+（既定`qwen3.8-flash-next-q5`）。実際のトークン値は
+リポジトリ・ドキュメントに書かない。`compose/docker-compose.yml`は
+`${MATTERMOST_BOT_TOKEN:-}`のようにDocker Composeの変数展開でこれらを参照しているため、
+値は**ホスト側のシェル環境変数**（例: `export MATTERMOST_BOT_TOKEN=... && docker compose up -d`）
+か、`**compose/.env`ファイル**（`docker compose`が自動読み込みする。`.gitignore`で
+除外済みのためコミットされない）のどちらかに置けばよい。
+`extra_hosts: ["host.docker.internal:host-gateway"]`をコンテナに設定しており、
+コンテナからホスト上のllama-swapへ到達できる。
 
 ## 開発時のビルド方法
 
@@ -176,43 +179,45 @@ fire-and-forget実装としている（将来グレースフルシャットダ�
 ## 既知の制限・今後の課題
 
 - Mattermost collector兼extractor（`internal/mattermost/`）は実装済み（収集・ローカルLLMでの
-  取得時分類・確定target分の自動タスク登録）。`syncer`（JIRA実同期）・`registrar`（JIRA実API
-  への自動起票）・`digest`（日次まとめ投稿）は未実装。着手にはJIRA APIトークンの準備が必要
-  （ユーザー側準備待ち）。メール・Zoom収集も未実装（着手にはIMAP認証情報・
-  Zoom Server-to-Server OAuthアプリの準備が必要）。
+取得時分類・確定target分の自動タスク登録）。`syncer`（JIRA実同期）・`registrar`（JIRA実API
+への自動起票）・`digest`（日次まとめ投稿）は未実装。着手にはJIRA APIトークンの準備が必要
+（ユーザー側準備待ち）。メール・Zoom収集も未実装（着手にはIMAP認証情報・
+Zoom Server-to-Server OAuthアプリの準備が必要）。
 - `user_map`テーブルは器のみ用意されており画面・業務ロジックからは未使用
-  （Mattermost extractorは`assignee_raw`を生の名前のまま`candidates`に保存するのみで、
-  `jira_account_id`への解決は行わない）。
+（Mattermost extractorは`assignee_raw`を生の名前のまま`candidates`に保存するのみで、
+`jira_account_id`への解決は行わない）。
 - ローカルLLMでの分類は、ComfyUIと同一GPUを排他利用するホスト環境のため、抽出処理実行時に
-  ComfyUIの画像/動画生成ジョブが強制停止されうる（許容する方針、
-  `docs/adr/complete/mattermost-extractor-llm-choice.md`参照）。また、未処理の投稿が
-  まとまっている場合（例: 初回起動時の直近24時間分）、スレッド単位の逐次LLM呼び出しのため
-  実測で分単位の時間がかかることがある（HTTPサーバーの起動はブロックしない設計のため、
-  ダッシュボード自体の可用性には影響しない）。
+ComfyUIの画像/動画生成ジョブが強制停止されうる（許容する方針、
+`docs/adr/complete/mattermost-extractor-llm-choice.md`参照）。また、未処理の投稿が
+まとまっている場合（例: 初回起動時の直近24時間分）、スレッド単位の逐次LLM呼び出しのため
+実測で分単位の時間がかかることがある（HTTPサーバーの起動はブロックしない設計のため、
+ダッシュボード自体の可用性には影響しない）。
 - 認証・アクセス制御は無い。外部公開しない前提（既定では`127.0.0.1`バインド、Docker運用時も
-  LAN内利用を想定）。
+LAN内利用を想定）。
 - JS無効時、編集/新規作成フォーム・非表示切替ボタンは通常のHTMLフォーム送信（トップレベル
-  ナビゲーション）にフォールバックする。**ただしハンドラ側はhtmx経由かどうかを判別せず、
-  常にボード＋トーストのHTMLフラグメント（`boardAndToast`テンプレート、`<html>`/`<head>`を
-  含まないフラグメント）を返す**ため、JS無効時にフォーム送信すると、ページ全体がこの
-  フラグメントに置き換わり、Tailwind CSS等を読み込むヘッダーやツールバーが失われた見た目に
-  なる（機能的にはタスクの作成・更新自体は成功する）。セッション機構を持たないため、
-  この経路ではトースト通知も次回操作まで残らない。
+ナビゲーション）にフォールバックする。**ただしハンドラ側はhtmx経由かどうかを判別せず、
+常にボード＋トーストのHTMLフラグメント（`boardAndToast`テンプレート、`<html>`/`<head>`を
+含まないフラグメント）を返す**ため、JS無効時にフォーム送信すると、ページ全体がこの
+フラグメントに置き換わり、Tailwind CSS等を読み込むヘッダーやツールバーが失われた見た目に
+なる（機能的にはタスクの作成・更新自体は成功する）。セッション機構を持たないため、
+この経路ではトースト通知も次回操作まで残らない。
 
 ## 関連ドキュメント
 
 - `docs/design/data-model.md`（このリポジトリ内） — DB設計（テーブル定義・マイグレーション）。
 - `docs/design/screen-board.md`（このリポジトリ内） — 画面設計: カンバンボード画面
-  （レーン・フィルタ・カード・編集/新規作成モーダル・D&D・「非表示」の業務ルール）。
+（レーン・フィルタ・カード・編集/新規作成モーダル・D&amp;D・「非表示」の業務ルール）。
 - `docs/design/screen-close-requests.md`（このリポジトリ内） — 画面設計: クローズ要求一覧画面
-  （承認/却下の業務ルール）。
+（承認/却下の業務ルール）。
 - `docs/design/screen-task-candidates.md`（このリポジトリ内） — 画面設計: タスク候補一覧画面
-  （承認/却下の業務ルール）。
+（承認/却下の業務ルール）。
 - `docs/adr/proposals/`・`docs/adr/complete/`（このリポジトリ内） — 全体構想のADR。
-  意思決定の経緯（案の比較・採用理由）を論点ごとのファイルに分けて記録している
-  （実装まで完了したものは`complete/`、決定のみで実装が無いものは`proposals/`）。
-- `docs/design/task-management-automation.md`（このリポジトリ内） — 全体構想のうち、
-  まだ実装していない`syncer`/`registrar`（実JIRA通信）/`digest`（およびメール/Zoom collector）
-  部分の確定設計（データモデルER図・パイプライン全体像。Mattermost collector兼extractorは
-  実装済み）。
+意思決定の経緯（案の比較・採用理由）を論点ごとのファイルに分けて記録している
+（実装まで完了したものは`complete/`、決定のみで実装が無いものは`proposals/`）。
+- `docs/design/automation-roadmap.md`（このリポジトリ内） — タスク管理自動化構想の全体像・
+背景・リスク・ロードマップ（Mattermost collector兼extractorは実装済み）。
+- `docs/design/mail-zoom-pipeline.md` / `docs/design/jira-sync.md` / `docs/design/digest.md`
+（このリポジトリ内） — 全体構想のうち、まだ実装していないメール/Zoom collector・extractor・
+registrar・syncer（JIRA実通信）・digestそれぞれの確定設計。
 - `docs/work-log.md` — Go+sqlc+htmxへの移行の経緯・判断理由
+

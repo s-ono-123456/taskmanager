@@ -5,6 +5,44 @@
 
 ---
 
+## 2026-09-13 / task-management-automation.mdを機能別に分割
+
+### やったこと
+
+- ユーザーから「`docs/design/task-management-automation.md`をなくしたい。適切に分割して
+  機能別に設計書を分けて」との依頼があった。同ファイルは「未実装のsyncer/registrar/digest」
+  の確定設計という位置づけだったが、実際にはMattermost実装済み部分の記述（他ドキュメントと
+  重複・一部陳腐化）と、真に未実装の複数機能（メール/Zoom収集・抽出・登録、JIRA同期、
+  日次まとめ、全体構想の背景・リスク・ロードマップ）が1ファイルに混在していた。
+- 次の4ファイルへ分割した:
+  - `docs/design/automation-roadmap.md` — 全体像・背景・パイプライン概念図・リスク・
+    ロードマップ（横断的な内容）。
+  - `docs/design/mail-zoom-pipeline.md` — メール/Zoom分の収集・抽出・登録・完了候補提示
+    （未実装、Claude API前提）。
+  - `docs/design/jira-sync.md` — JIRA同期方針（syncer、未実装）＋追跡フラグとの関係。
+  - `docs/design/digest.md` — 日次まとめ(digest)の構成（未実装）。
+- Mattermost実装済み部分の記述（収集の10分間隔・`MATTERMOST_CHANNEL_ROUTES`など）は、
+  重複させず`docs/design/data-model.md`「Mattermost extractor」節に統合した
+  （直前のやり取りでユーザーから「10分おきのプロセスはどこに書いた」と聞かれた際、
+  task-management-automation.mdの1箇所にしか書かれておらず見つけにくかった反省を踏まえ、
+  実装済みextractorの確定仕様として一元化した）。
+- 元ファイルを参照していた21ファイル（README.md・CLAUDE.md・docs/adr/README.md・
+  docs/session-context.md・docs/design/配下・docs/adr/complete｜proposals/配下14ファイル・
+  internal/mattermost/・internal/taskstore/schema.sql・compose/docker-compose.yml）を
+  すべて洗い出し、分割後の適切なファイルへのリンクに更新した（`docs/work-log.md`自体の
+  過去ログは記録として書き換えない）。
+- `sqlc generate`→`go build`で最終確認。
+
+### 学んだこと
+
+- 「全体構想の未実装部分」を1ファイルにまとめる設計は、実装が進むにつれて「一部実装済み・
+  一部未実装」が同一ファイル内に混在し続け、更新漏れ（前回コミットで直したはずの記述が
+  別の未更新箇所に残る）を誘発しやすかった。機能単位（メール/Zoom、JIRA同期、digest）に
+  最初から分けておけば、実装が進んだ機能のファイルだけを差し替え/削除すればよく、
+  ドキュメントの陳腐化に気づきやすい。
+
+---
+
 ## 2026-09-13 / ADR内容をdocs/design/へ反映（ドキュメント整合性の見直し）
 
 ### やったこと

@@ -83,10 +83,10 @@ const MinCandidateConfidence = 0.3
 // targetPostIDsに列挙した投稿(スレッド内の新着分)それぞれをkind/target等に分類する。
 // projectHintはそのチャンネルに設定されたtarget(jira_a/jira_b/personal)の手がかりとして
 // プロンプトに含める(本文の内容と矛盾する場合は本文を優先させる、
-// docs/design/task-management-automation.md「抽出・分類」節の方針を踏襲)。
+// docs/design/mail-zoom-pipeline.md「抽出・分類」節の方針を踏襲)。
 // openTasksはprojectHintに紐づく未クローズタスク一覧で、kind=completionと判定した投稿の
 // 対象タスク推定(RelatedTaskID)の手がかりとして渡す
-// (docs/adr/proposals/close-request-target-task-suggestion.md参照)。
+// (docs/adr/complete/close-request-target-task-suggestion.md参照)。
 func (c *LLMClient) Classify(ctx context.Context, threadTranscript string, targetPostIDs []string, projectHint string, openTasks []OpenTask) ([]ClassifyResult, error) {
 	system := `あなたはMattermostの発言を分類するアシスタントです。渡されたスレッドの文脈を踏まえ、
 指定された投稿IDそれぞれについて、次のJSON形式で厳密に回答してください（説明文は不要、JSONのみ）:

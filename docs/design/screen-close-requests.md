@@ -6,7 +6,7 @@
 
 ## 位置づけ
 
-タスク管理自動化構想の全体設計（`docs/design/task-management-automation.md`）のADR
+タスク管理自動化構想の全体設計（`docs/design/automation-roadmap.md`）のADR
 「完了候補の承認UI」（`docs/adr/complete/completion-approval-ui.md`）で採用案C3として
 決めた実装。`candidates`テーブル（`kind='completion'`かつ
 `human_verdict`が未設定の行）を一覧表示し、ツールバーの「クローズ要求」ボタン（承認待ち件数

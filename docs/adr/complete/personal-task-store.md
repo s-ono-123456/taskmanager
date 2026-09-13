@@ -1,6 +1,6 @@
 # 論点: 個人タスクの格納先
 
-- 起票: 2026-09-12 / タスク管理自動化構想の一部（`docs/design/task-management-automation.md` 参照）
+- 起票: 2026-09-12 / タスク管理自動化構想の一部（`docs/design/automation-roadmap.md` 参照）
 - 論点: JIRAはプロジェクトごとに別管理（2プロジェクト）だが、Mattermost/メールで依頼される
   個人タスクには専用の管理先が無く漏れやすい。個人タスクをどこに格納するかを決める。
 - 状態: **採用済み（A2、2026-09-12）**
@@ -20,7 +20,6 @@
 
 ## 関連する設計ドキュメント
 
-- `docs/design/task-management-automation.md`（データモデル ER図・`tasks`テーブルの`jira_key`
-  の扱い）
+- `docs/design/data-model.md`（データモデル ER図・`tasks`テーブルの`jira_key`の扱い）
 - `docs/design/data-model.md`（`tasks`テーブルのスキーマ定義・ER図）
 - `docs/design/design.md`（個人タスクを含むダッシュボードUIのパイロット実装の全体方針）

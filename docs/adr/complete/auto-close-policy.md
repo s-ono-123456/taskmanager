@@ -1,6 +1,6 @@
 # 論点: 完了判定の自動化可否
 
-- 起票: 2026-09-12 / タスク管理自動化構想の一部（`docs/design/task-management-automation.md` 参照）
+- 起票: 2026-09-12 / タスク管理自動化構想の一部（`docs/design/automation-roadmap.md` 参照）
 - 論点: 完了報告らしき発言を検知した際、JIRA/タスクを自動でクローズしてよいか、それとも
   必ず人間の承認を挟むか。
 - 状態: **採用済み・実装済み**
@@ -26,5 +26,5 @@
 
 ## 関連する設計ドキュメント
 
-- `docs/design/task-management-automation.md`（完了候補提示・クローズの節）
-- `docs/design/screen-close-requests.md`（クローズ要求一覧画面の承認フロー）
+- `docs/design/mail-zoom-pipeline.md`（完了候補提示・クローズの節、未実装部分）
+- `docs/design/screen-close-requests.md`（クローズ要求一覧画面の承認フロー、Mattermost分は実装済み）

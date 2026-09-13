@@ -1,14 +1,15 @@
 # 論点: Mattermost連携の実装スコープ
 
-- 起票: 2026-09-13 / タスク管理自動化構想の一部（`docs/design/task-management-automation.md` 参照）
+- 起票: 2026-09-13 / タスク管理自動化構想の一部（`docs/design/automation-roadmap.md` 参照）
 - 論点: 「Mattermost連携機能」の要望に対し、`collector`/`extractor`/`registrar`のうちどこまでを
   今回実装するか。
 - 状態: **採用済み・実装完了（2026-09-13）**
 
 ## 背景
 
-`docs/design/task-management-automation.md`には収集(collector)→抽出(extractor、Claude API)→
-登録(registrar、JIRA API)までの全体パイプラインが設計済みだが未実装。本リポジトリ
+`docs/design/automation-roadmap.md`（当時は`docs/design/task-management-automation.md`）には
+収集(collector)→抽出(extractor、Claude API)→登録(registrar、JIRA API)までの全体パイプラインが
+設計済みだが未実装だった。本リポジトリ
 （taskmanager）は「外部通信は一切行わない（Mattermost/メール/Zoom/JIRA/Claude APIいずれにも
 接続しない）」というCLAUDE.md/design.mdに明記の核となる方針を持つ。今回「Mattermost連携」を
 実装することは、このうち「Mattermost」への接続に関して方針転換することを意味するが、
@@ -31,7 +32,7 @@ grillingスキルでの確認により、段階的な範囲拡大（まず収集
 
 ## 関連する設計ドキュメント
 
-- `docs/design/task-management-automation.md`（全体パイプライン設計）
+- `docs/design/automation-roadmap.md`（全体パイプライン設計）
 - `docs/adr/complete/collection-trigger.md`（収集トリガー方式=cron定期ポーリング、既に決定済み。
   今回の実装で実際に使用する）
 

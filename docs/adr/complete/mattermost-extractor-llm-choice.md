@@ -1,13 +1,13 @@
 # 論点: Mattermost extractorで使うAI(LLM)の選定
 
-- 起票: 2026-09-13 / タスク管理自動化構想の一部（`docs/design/task-management-automation.md` 参照）
+- 起票: 2026-09-13 / タスク管理自動化構想の一部（`docs/design/automation-roadmap.md` 参照）
 - 論点: Mattermost収集メッセージを取得時に分類・タスク化するextractorで、どのLLMに接続するか。
 - 状態: **採用済み・実装完了（2026-09-13）**
 
 ## 背景
 
-`task-management-automation.md`の既存設計はextractorをClaude API（Anthropic）で実装する想定
-だったが、CLAUDE.md/design.mdには「Claude APIへは引き続き一切接続しない」という方針が
+当時の設計（現`docs/design/mail-zoom-pipeline.md`「抽出・分類」節）はextractorをClaude API
+（Anthropic）で実装する想定だったが、CLAUDE.md/design.mdには「Claude APIへは引き続き一切接続しない」という方針が
 明記されている。一方、このホスト環境には`/work/docker/llama-swap/`で構築済みのローカルLLM
 基盤（llama-swap、OpenAI互換API、ポート8080、host network）が既に稼働しており、
 `qwen3.8-27b`/`qwen3.8-flash-next`/`qwen3.8-flash-next-iq2`/`qwen3.8-flash-next-q5`の
@@ -35,5 +35,5 @@ GPU競合（ComfyUIジョブの強制停止）は許容することとした。
 
 ## 関連する設計ドキュメント
 
-- `docs/design/task-management-automation.md`（技術スタック節、extractorの実装方式）
-- `docs/design/data-model.md`（Mattermost extractorの節）
+- `docs/design/mail-zoom-pipeline.md`（技術スタック節、メール/Zoom分のextractor実装方式）
+- `docs/design/data-model.md`（Mattermost extractorの節、実装済みのLLM選定結果）

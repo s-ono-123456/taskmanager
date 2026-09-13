@@ -1,6 +1,6 @@
 # 論点: Mattermost収集メッセージの保存方針の見直し
 
-- 起票: 2026-09-13 / タスク管理自動化構想の一部（`docs/design/task-management-automation.md` 参照）
+- 起票: 2026-09-13 / タスク管理自動化構想の一部（`docs/design/automation-roadmap.md` 参照）
 - 論点: 収集した生メッセージを`messages`テーブルに長期保存し続けるかどうか。
 - 状態: **採用済み・実装完了（2026-09-13）。`docs/adr/complete/mattermost-collector-scope.md`の
   「収集のみ」方針の一部を上書きする**
