@@ -67,29 +67,26 @@ docs/design/screen-task-candidates.md # 画面設計: タスク候補一覧
 
 ## 実行方法
 
-**`internal/taskstore/db.go`/`models.go`/`query.sql.go`はsqlc生成コードでコミットしない
-（`.gitignore`対象）。ビルド前に必ず`sqlc generate`を実行すること。**
+**`internal/taskstore/db.go`/`models.go`/`query.sql.go`はsqlc生成コードでコミットせず、
+ローカルにも置かない方針。**
 
-- sqlcによるコード生成（この環境にGo/sqlcがローカルインストールされていない場合、
-  `docker run`経由で行う方針）:
+- Docker実行（通常はこちらのみでよい）: `docker compose -f compose/docker-compose.yml up -d --build`
+  - `build/Dockerfile`内で`sqlc generate`→ビルドをすべて`COPY`（バインドマウントではない）で
+    完結させているため、ホストに生成物は一切出力されない。
+  - ポート8090、実データ(SQLite)は`/docker/task-dashboard/data`
+    （このリポジトリの外・gitの管理対象外）にボリュームマウントされる。
+- ビルドが通るかだけ確認したい場合（同じくホストを汚さない）:
   ```bash
-  docker run --rm --user "$(id -u):$(id -g)" -v "$(pwd)/internal/taskstore:/src" -w /src \
-    sqlc/sqlc generate
+  docker build -f build/Dockerfile -t task-dashboard:verify .
   ```
-- ローカルビルド（同じくDocker経由）:
-  ```bash
-  docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$(pwd):/src" -w /src \
-    golang:1.25-alpine go build -o /src/.build/task-dashboard .
-  ```
-  - `--user`を付けないと生成物がroot所有になるので必ず付けること。
+- `go vet`/`go test`等を実行したい場合: **`internal/taskstore`をホストへ書き込み可能で
+  バインドマウントして実行することは禁止**（sqlc生成コードがホストに残留する事故が
+  繰り返し起きたため）。ホストのソースを読み取り専用でDocker named volumeへコピーし、
+  以降はvolume内だけで完結させる（詳細・具体的なコマンドは
+  `docs/design/design.md`「開発時のビルド方法」参照）。
   - 実行時は環境変数`TASK_DASHBOARD_HOST`（既定127.0.0.1）/`TASK_DASHBOARD_PORT`
     （既定5000）/`TASK_DASHBOARD_DB_PATH`/`TASK_DASHBOARD_AUTO_SEED`
     （`1`でDBが空の時のみ自動シード）で上書き可能。
-- Docker実行: `docker compose -f compose/docker-compose.yml up -d --build`
-  - `build/Dockerfile`内で`sqlc generate`を自動実行してからビルドするため、事前の
-    手動生成は不要。
-  - ポート8090、実データ(SQLite)は`/docker/task-dashboard/data`
-    （このリポジトリの外・gitの管理対象外）にボリュームマウントされる。
 - Mattermost collector兼extractor（任意）: `MATTERMOST_BOT_TOKEN`/`MATTERMOST_SERVER_URL`/
   `MATTERMOST_CHANNEL_ROUTES`（例: `channelID1:jira_a,channelID2:jira_b`）に加え、
   `MATTERMOST_EXTRACTOR_LLM_URL`（既定`http://host.docker.internal:8080`）・
