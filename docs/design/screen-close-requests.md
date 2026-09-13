@@ -25,7 +25,7 @@ human_verdict = '')`の行を取得する（`internal/web/kanban.go`の`LoadClos
   自動解決する。見つからなければエラートースト。
 - **承認（`related_jira_key`なし）**: フォームの`task_id`（画面上の`<select>`でユーザーが
   選んだタスクID）を使う。未選択ならエラートースト（LLMによる自動推定は
-  collector/extractor未実装のため行わず、人間が選ぶ形で代替している）。
+  extractor未実装のため行わず、人間が選ぶ形で代替している）。
 - **承認の効果**: 対象タスクを`status='done'`に更新し、`closedAtForTransition`で`closed_at`
   を設定（`closeTask()`関数、`edit`/`move`ハンドラと共通ロジック）。JIRA連携タスクなら
   `stubJiraTransition(jiraKey, "close_via_completion_candidate")`を呼ぶ（実通信なし）。
@@ -50,9 +50,10 @@ human_verdict = '')`の行を取得する（`internal/web/kanban.go`の`LoadClos
 
 ## 現状の制約
 
-collector/extractorが未実装のため、実運用では`candidates`テーブルに`kind=completion`の
-データが投入されず、この画面は空のままになる。現状は`internal/taskstore/seed.go`の
-サンプルデータでのみ動作確認できる。
+extractorが未実装のため（Mattermost collectorは実装済みで`messages`テーブルへ実データが
+溜まるが、そこから`candidates`への変換は行われない）、実運用では`candidates`テーブルに
+`kind=completion`のデータが投入されず、この画面は空のままになる。現状は
+`internal/taskstore/seed.go`のサンプルデータでのみ動作確認できる。
 
 ## 関連ドキュメント
 

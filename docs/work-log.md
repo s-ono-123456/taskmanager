@@ -5,6 +5,52 @@
 
 ---
 
+## 2026-09-13 / Cycles・優先度・Mattermost collector実装の設計書反映漏れを一斉点検
+
+### やったこと
+
+- ユーザーから「ここまでの内容を設計書に落として。今実装されている内容で反映されていない
+  ものはすべて落として」との依頼を受け、直近のCycles/優先度/Mattermost collector/
+  docker-compose環境変数の4回の実装で発生していた設計書への反映漏れを棚卸しした。
+  各機能実装時にその都度ドキュメントを更新してきたが、以下の箇所が古い記述のまま
+  取り残されていた。
+  - **`README.md`**: 3機能すべて未反映のまま放置されていた（「外部通信は一切行わない」、
+    ディレクトリ構成に`internal/mattermost/`・`rollover.go`が無い、Mattermost環境変数の
+    説明が無い、等）。全面的に更新した。
+  - **`docs/design/screen-board.md`**: 「モーダル（2種）」節が「構成・項目はFlask版から
+    変更していない」のままで、週の所属表示（Cycles）・優先度selectの追加が未反映。
+    「カード」節・ルート一覧のnew/edit概要も同様に未反映だった。
+  - **`docs/design/screen-close-requests.md`**: 「collector/extractor未実装のため」という
+    記述が、Mattermost collector実装後は部分的に不正確になっていた（extractorのみ未実装、
+    collectorはMattermost分のみ実装済み）。
+  - **`docs/design/design.md`・`docs/design/task-management-automation.md`・`CLAUDE.md`**:
+    「まだ未実装のcollector/extractor/syncer/registrar/digest」という一括りの表現が
+    複数箇所に残っており、Mattermost collector実装後の実態（extractor/syncer/registrar/
+    digestのみ未実装）と食い違っていた。
+  - `compose/docker-compose.yml`冒頭コメントの「外部通信なし」「/workメインリポジトリの
+    docs/adr/proposals/task-management-automation.md参照」も、リポジトリ独立化・
+    Mattermost collector追加で古くなっていたため修正した。
+- ADR（`docs/adr/complete/`配下）は意思決定の経緯を残す追記オンリーの記録のため、
+  今回の点検では書き換えず現状のまま維持した（`dashboard-tech.md`の「自動化パイプラインは
+  Python想定」という記述も、決定当時の前提の記録として残している。その後の実態変化は
+  `mattermost-collector-language.md`という別のADRで扱っている）。
+
+### 学んだこと・注意点
+
+- 機能実装のたびに関連ドキュメントを更新してはいたが、**「その機能に直接関係する節」だけを
+  見て、リポジトリ全体のドキュメント（特にREADME.md）への波及を見落とす**、という抜けが
+  複数回（Cycles・優先度・Mattermost collectorそれぞれ）発生していた。特にREADME.mdは
+  一度も更新対象に入れておらず、3機能分すべてが未反映のまま蓄積していた。
+- 今後、機能実装のドキュメント更新時は「その機能の専用セクションを追記する」だけでなく、
+  `grep -rn "<変更前の表現>"`でリポジトリ全体（README.mdも含めて）を横断的に検索し、
+  同じ主張が他のファイルに重複していないか確認する一手間を、都度のコミット前チェックの
+  一部として組み込むとよい。
+- 「ここまでの内容を設計書に落として」のような包括的な依頼を受けた際は、個別ファイルの
+  差分だけでなく、プロジェクト全体のドキュメント（README.md含む）を横断的に読み直す
+  棚卸し作業として扱うべきだと分かった。
+
+---
+
 ## 2026-09-13 / Mattermost認証情報をホスト環境変数から引き継ぐcompose設定
 
 ### やったこと

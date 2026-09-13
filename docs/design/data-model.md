@@ -100,7 +100,7 @@ Cycleテーブルは持たない（過去サイクルの履歴参照は要件外
 
 ## Mattermost collector（収集のみ）
 
-「外部通信は一切行わない」という本パイロットの既定方針を、Mattermostに限り覆し、実際に
+「外部通信は原則行わない」という本パイロットの既定方針を、Mattermostに限り覆し、実際に
 Mattermost APIをポーリングして`messages`テーブルへ保存するcollectorを実装している
 （`internal/mattermost/`、collectorのみで抽出・JIRA自動起票は対象外。比較検討の経緯は
 `docs/adr/complete/mattermost-collector-scope.md`・`mattermost-collector-language.md`参照）。

@@ -87,8 +87,9 @@ DBスキーマ・ER図は`docs/design/data-model.md`を参照（パイロット�
 （[個人タスクの格納先](../adr/complete/personal-task-store.md)で採用）の実体は`tasks`
 テーブルからここまで育てたもの。
 
-以下は、まだ実装されていないcollector/extractor/registrar/digestが動く前提での、上記
-データモデルの使われ方（スキーマ自体の定義はdata-model.mdを参照、ここでは重複させない）。
+以下は、まだ実装されていないextractor/registrar/digest（およびメール/Zoom collector）が
+動く前提での、上記データモデルの使われ方（スキーマ自体の定義はdata-model.mdを参照、
+ここでは重複させない）。
 
 - `messages.project_hint`は収集元の設定（`project_routing`、後述「収集」参照）から機械的に
   付与する「対象プロジェクトの手がかり」。抽出時にLLMへ渡すコンテキストとして使う。

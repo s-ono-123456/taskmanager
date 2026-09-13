@@ -52,7 +52,7 @@
 │   ├── render.go                 # テンプレートレンダリング
 │   └── templates/board.html.tmpl # 唯一のテンプレート(html/template、go:embed)
 ├── static/
-│   ├── htmx.min.js              # htmx本体(vendor同梱。外部通信ゼロの原則に合わせCDN不使用)
+│   ├── htmx.min.js              # htmx本体(vendor同梱。ブラウザ側の不要な外部通信を増やさない方針に合わせCDN不使用)
 │   └── board.js                 # ボード画面のJS(board.html.tmplから分離)
 └── docs/design/
     ├── design.md                 # 本書(全体方針)
@@ -193,6 +193,6 @@ fire-and-forget実装としている（将来グレースフルシャットダ�
   意思決定の経緯（案の比較・採用理由）を論点ごとのファイルに分けて記録している
   （実装まで完了したものは`complete/`、決定のみで実装が無いものは`proposals/`）。
 - `docs/design/task-management-automation.md`（このリポジトリ内） — 全体構想のうち、
-  まだ実装していない`collector`/`extractor`/`syncer`/`registrar`/`digest`部分の確定設計
-  （データモデルER図・パイプライン全体像）。
+  まだ実装していない`extractor`/`syncer`/`registrar`/`digest`（およびメール/Zoom collector）
+  部分の確定設計（データモデルER図・パイプライン全体像。Mattermost collectorは実装済み）。
 - `docs/work-log.md` — Go+sqlc+htmxへの移行の経緯・判断理由

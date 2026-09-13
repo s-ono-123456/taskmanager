@@ -38,7 +38,7 @@ DB設計は`docs/design/data-model.md`、画面設計は`docs/design/screen-boar
   `target`（タスクの対象）と名前が衝突するのを避けるため。
 - 「クローズ要求一覧」（`candidates.kind=completion`の承認/却下）で、候補に
   `related_jira_key`が無い場合は対象タスクをLLMが自動推定せず、**画面上の`<select>`で
-  人間が選ぶ**（collector/extractor未実装のための代替。承認時はサーバー側で自動解決しない）。
+  人間が選ぶ**（extractor未実装のための代替。承認時はサーバー側で自動解決しない）。
   また、extractorが無いため実運用ではこの一覧に実データが投入されず、
   `seed.go`のサンプルデータでのみ動作確認できる。
 - **優先度(`priority`)は表示専用**（最高/高/中/低、デフォルト「中」）。カード上のバッジ
@@ -63,8 +63,8 @@ DB設計は`docs/design/data-model.md`、画面設計は`docs/design/screen-boar
   意思決定の経緯（案の比較・採用理由）を論点ごとのファイルに分けて記録している
   （実装まで完了したものは`complete/`）。
 - `docs/design/task-management-automation.md`（本リポジトリ内） — 全体構想のうち、まだ
-  未実装のcollector/extractor/syncer/registrar/digestを含む確定設計（データモデル・
-  パイプライン全体像）。
+  未実装のextractor/syncer/registrar/digest（およびメール/Zoom collector）を含む確定設計
+  （データモデル・パイプライン全体像。Mattermost collectorは実装済み）。
 - `docs/adr/README.md`（本リポジトリ内） — ADRとdocs/design/の役割分担・ファイル構成の
   運用ルール。
 - `docs/session-context.md` / `docs/task-queue.md` / `docs/work-log.md`（本リポジトリ内） —

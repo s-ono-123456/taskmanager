@@ -5,8 +5,15 @@
 UIのパイロット実装」に相当するリポジトリ。2026-09-12に`/work`（メインリポジトリ）の
 `docker/task-dashboard/`からこの独立リポジトリへ切り出された。
 
-**外部通信は一切行わない。** Mattermost/メール/Zoom/JIRA/Claude APIいずれにも
-接続せず、JIRA連携相当の操作はすべて`stubJiraTransition()`によるログ出力のみ。
+**外部通信は原則行わない。** メール/Zoom/JIRA/Claude APIいずれにも接続せず、JIRA連携
+相当の操作はすべて`stubJiraTransition()`によるログ出力のみ。唯一の例外として、
+Mattermost collector（`internal/mattermost/`、収集のみ。2026-09-13追加）は実際に
+Mattermost APIへポーリング接続し、`messages`テーブルへ実データを保存する
+（認証情報未設定なら起動しない。詳細は後述）。
+
+主な機能: カンバンボード（4ステータス列×「今週/バックログ」2スイムレーン、
+ドラッグ&ドロップ、優先度バッジ）、週次サイクルの自動繰り越し、クローズ要求一覧、
+Mattermost collector（収集のみ）。
 
 全体構想（本パイロットが将来どう拡張される想定か）は`docs/design/task-management-automation.md`
 を参照。各設計判断の経緯は`docs/adr/proposals/`・`docs/adr/complete/`配下の論点ファイルを参照。
@@ -39,6 +46,10 @@ internal/taskstore/            # データ層(SQLとロジックの分離を最�
   db.go / models.go / query.sql.go  # sqlc生成コード(コミットしない。ビルド時に生成)
   store.go                      # DB接続・起動時マイグレーション
   seed.go                       # サンプルデータ投入(再実行可能・全件作り直し)
+  rollover.go                   # 週次サイクルの自動繰り越し(常駐goroutine)
+internal/mattermost/           # Mattermost collector(収集のみ。外部通信の唯一の例外)
+  client.go                     # net/httpのみの最小限のRESTクライアント
+  collector.go                  # 設定読み込み・常駐goroutineでのポーリング
 internal/web/                  # HTTPハンドラ・業務ロジック
   handlers.go / kanban.go / render.go
   templates/board.html.tmpl     # 唯一のテンプレート(html/template、go:embed)
@@ -75,6 +86,11 @@ docs/design/screen-close-requests.md  # 画面設計: クローズ要求一覧
     手動生成は不要。
   - ポート8090、実データ(SQLite)は`/docker/task-dashboard/data`
     （このリポジトリの外・gitの管理対象外）にボリュームマウントされる。
+- Mattermost collector（任意）: `MATTERMOST_BOT_TOKEN`/`MATTERMOST_SERVER_URL`/
+  `MATTERMOST_CHANNEL_ROUTES`（例: `channelID1:jira_a,channelID2:jira_b`）を設定すると
+  実際にMattermost APIをポーリングして`messages`テーブルへ保存する（10分間隔）。
+  未設定ならcollectorは起動しない。値はリポジトリに書かず、ホストのシェル環境変数か
+  `compose/.env`（`.gitignore`対象）で渡す（`docker-compose.yml`は`${VAR:-}`で展開する）。
 
 ## 関連ドキュメント
 
@@ -86,6 +102,6 @@ docs/design/screen-close-requests.md  # 画面設計: クローズ要求一覧
 - `docs/adr/proposals/`・`docs/adr/complete/` — 全体構想のADR。意思決定の経緯（案の比較・
   採用理由）を論点ごとのファイルに分けて記録している（実装まで完了したものは`complete/`）。
 - `docs/design/task-management-automation.md` — 全体構想のうち、まだ未実装の
-  collector/extractor/syncer/registrar/digestを含む確定設計（データモデル・パイプライン
-  全体像）。
+  extractor/syncer/registrar/digest（およびメール/Zoom collector）を含む確定設計
+  （データモデル・パイプライン全体像。Mattermost collectorは実装済み）。
 - `docs/work-log.md` — 完了した作業の経緯・学んだこと（Go+sqlc+htmxへの移行判断など）。

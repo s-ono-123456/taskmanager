@@ -53,7 +53,10 @@
   （`data-title`等）からモーダルへ値を流し込む方式で、サーバー往復なしに即座に開く
   （Flask版と同じ設計）。
 - `draggable="true"`。ドラッグ&ドロップで別レーンへ移動できる（後述）。
-- レイアウト・タグ表示・非表示バッジ・期限バッジの見た目はFlask版から変更していない。
+- タグ表示・非表示バッジ・期限バッジの基本レイアウトはFlask版から変更していないが、
+  Go+htmx版移行後に`data-cycle`（週の所属）・`data-priority`（優先度）のdata属性と、
+  優先度の色分けバッジ（`target`バッジの隣）を追加している（前述「スイムレーン構成」
+  「優先度バッジ」参照）。
 
 ## 編集・新規作成の送信（htmx化）
 - 編集フォーム・新規作成フォーム・非表示切替ボタンは、いずれも`hx-post`で送信し、
@@ -104,8 +107,13 @@
   使わない（比較検討の経緯は`docs/adr/complete/cycle-rollover-execution.md`参照）。
 
 ## モーダル（2種、ともに標準`<dialog>`要素、外部ライブラリ不使用）
-- 構成・項目はFlask版から変更していない（詳細表示＋編集のハイブリッドUI、新規タスクの
-  簡易フォーム、背景クリックで閉じる等）。
+- 基本構成（詳細表示＋編集のハイブリッドUI、新規タスクの簡易フォーム、背景クリックで
+  閉じる等）はFlask版から変更していないが、Go+htmx版移行後に以下を追加している。
+  - 編集モーダルの入力項目: 期限・対象・状態・優先度（`grid grid-cols-2 sm:grid-cols-4`）。
+    読み取り専用の情報欄（`<dl>`）に「週の所属」（今週/バックログ、切替はD&Dのみのため
+    編集不可）を追加。
+  - 新規作成モーダルの入力項目: タイトル・説明・期限・対象・優先度（デフォルト「中」）。
+    週の所属を選ぶUIは無く、常にバックログで作成される（前述「スイムレーン構成」参照）。
 
 ## 自動リフレッシュ
 - 45秒間隔で`htmx.ajax('GET', '/', {target:'#board', swap:'outerHTML', select:'#board', ...})`
@@ -125,8 +133,8 @@
 | メソッド/パス | 概要 |
 |---|---|
 | `GET /` | ボード表示。`target`・`show_untracked`をクエリパラメータで受け取る |
-| `POST /tasks/new` | 新規タスク作成（due_date任意）。target が jira_a/jira_b の場合はJIRA起票スタブのログのみ出力（実通信なし） |
-| `POST /tasks/{id}/edit` | 編集モーダルからの保存。title/target/statusを検証し更新（due_dateは未入力ならNULLとして保存）。`status`が`done`へ/から変化する際は`closed_at`をその場で設定/クリアする |
+| `POST /tasks/new` | 新規タスク作成（due_date任意、priorityは未指定なら`medium`）。target が jira_a/jira_b の場合はJIRA起票スタブのログのみ出力（実通信なし） |
+| `POST /tasks/{id}/edit` | 編集モーダルからの保存。title/target/status/priorityを検証し更新（due_dateは未入力ならNULLとして保存）。`status`が`done`へ/から変化する際は`closed_at`をその場で設定/クリアする |
 | `POST /tasks/{id}/move` | ドラッグ&ドロップからの状態変更。`status`に加え`cycle`(`this_week`/`backlog`)も受け取り両方を更新する。JIRA連携タスクなら`stubJiraTransition()`を呼ぶ |
 | `POST /tasks/{id}/track` | 「非表示」/「再表示」ボタン。後述の業務ルール参照 |
 
