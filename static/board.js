@@ -99,6 +99,24 @@ newTaskModal.addEventListener('click', function (ev) {
   }
 });
 
+// クローズ要求一覧モーダル(論点C3)。承認/却下を続けて処理できるよう、
+// 編集・新規作成モーダルと違って送信後も自動では閉じない(htmx:afterRequestの対象外)。
+var closeRequestsModal = document.getElementById('close-requests-modal');
+
+document.getElementById('close-requests-btn').addEventListener('click', function () {
+  closeRequestsModal.showModal();
+});
+
+document.getElementById('close-requests-cancel').addEventListener('click', function () {
+  closeRequestsModal.close();
+});
+
+closeRequestsModal.addEventListener('click', function (ev) {
+  if (ev.target === closeRequestsModal) {
+    closeRequestsModal.close();
+  }
+});
+
 // 編集・新規作成フォームの送信後、バリデーション成功時のみモーダルを閉じる
 // (HTTPステータスは常に200で返るため、成功/失敗はレスポンスヘッダー
 // X-Toast-Categoryで判定する)。

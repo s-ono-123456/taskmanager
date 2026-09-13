@@ -5,6 +5,59 @@
 
 ---
 
+## 2026-09-13 / 「クローズ要求一覧」画面を実装（ADR論点C3）
+
+### やったこと
+
+- ユーザーから「その画面を作って」という依頼（直前にADR論点CをC3採用へ訂正した流れ）を受け、
+  影響範囲が複数ファイルにまたがる新機能のためプランモードで方針を確認してから実装した。
+- `internal/taskstore/query.sql`に`ListPendingCompletionCandidates`
+  （`candidates.kind='completion' AND human_verdict未設定`を`messages`とJOINして取得）・
+  `GetCandidate`・`UpdateCandidateVerdict`・`GetTaskByJiraKey`・`ListOpenTasksByTarget`を追加。
+- `internal/taskstore/seed.go`に承認待ちの完了報告候補を2件追加した（1件は
+  `related_jira_key="PROJA-101"`で対象タスクが一意に決まるケース、1件は`target=personal`で
+  `related_jira_key`が無く、画面上で対象タスクを選ぶケース）。
+- `internal/web/kanban.go`に`CloseRequest`/`OpenTaskOption`ビューモデル、
+  `LoadCloseRequests()`（`related_jira_key`が無い候補には`ListOpenTasksByTarget`で選択肢を
+  付加）、`closeTask()`（既存の`closedAtForTransition`・`stubJiraTransition`を再利用する
+  クローズ処理の共通化）を追加し、`BoardData`に`CloseRequests`を追加した。
+- `internal/web/handlers.go`に`POST /candidates/{id}/approve`・
+  `POST /candidates/{id}/reject`を追加。承認は`related_jira_key`があれば自動解決、
+  無ければフォームの`task_id`（`<select>`でユーザーが選択）を使う。
+- `internal/web/templates/board.html.tmpl`にツールバーの「クローズ要求」ボタン（件数バッジ）・
+  `close-requests-modal`・一覧表示テンプレートを追加。一覧本体（`close-requests-container`）
+  と件数バッジ（`close-requests-count`）は、既存のトーストと同じ`hx-swap-oob="true"`パターンで
+  ボード操作のたびに再描画するようにした（モーダル自体は`#board`外の静的要素なので、承認/却下
+  後も開いたままになり複数件を続けて処理できる）。
+- `static/board.js`にモーダルの開閉処理（新規タスクモーダルと同じパターン）を追加。
+- 動作確認: Docker経由で`sqlc generate`→`go build`が通ることを確認した後、ローカルで
+  サーバーを起動しブラウザ（claude-in-chrome）で一連の操作を確認した。
+  - `related_jira_key`ありの候補を承認 → 対象タスク（API仕様書をまとめる/PROJA-101）が
+    完了レーンへ移動、トースト表示、一覧から消え、バッジが2→1に更新されることを確認。
+  - `related_jira_key`なしの候補で`<select>`から対象タスク（個人: 経費精算）を選び承認
+    → そのタスクが完了することを確認（ネイティブ`<select>`はcomputerツールのキー操作では
+    選択できなかったため、javascript_toolで`value`をセットし`change`イベントを発火させて
+    選択した）。
+  - モーダルが承認後も開いたままであること、背景クリックで閉じられること、既存の編集
+    モーダル等が影響を受けていないことを確認。
+  - 検証後、生成物（`sqlc generate`の出力3ファイル・`.build/`）と一時DBは削除済み
+    （コミットしない方針を維持）。
+- ドキュメント更新: `docs/design/design.md`にルート一覧2行・「クローズ要求一覧」の業務ルール
+  節・「既知の制限」の実態修正を追加。`docs/design/task-management-automation.md`と
+  ADR論点Cファイルの「まだ実装していない」という記述を実装済みに更新。CLAUDE.mdの
+  「誤解しやすい業務ルール」に、対象タスク未確定時は人間が画面上で選ぶ点を追記。
+
+### 学んだこと・注意点
+
+- ネイティブ`<select>`要素はブラウザ拡張のcomputerツール（クリック+矢印キー）では選択操作が
+  反映されないことがあった。`javascript_tool`で`element.value`をセットし`change`イベントを
+  発火させる方法で確実にテストできた。
+- `candidates`のような「将来のパイプライン用に用意されていたが実データが無いテーブル」に
+  UIを先行実装する場合、`seed.go`にデモ用データを追加しないと機能の動作確認自体ができない
+  （既存の`tasks`同様、パイロット全体が「実装が先、実データ投入は後」という順序で育っている）。
+
+---
+
 ## 2026-09-13 / ADR論点C: C2「検討中」表記の誤りを修正しC3採用として確定
 
 ### やったこと

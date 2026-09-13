@@ -29,6 +29,11 @@ Mattermost/メール/Zoom/JIRA/Claude APIいずれにも接続せず、JIRA連�
 - 編集・新規作成フォームがフィルタ状態（`target`/`show_untracked`）をhx-valsで送る際は
   `filter_target`/`filter_show_untracked`という専用キー名を使う。フォーム自身の
   `target`（タスクの対象）と名前が衝突するのを避けるため。
+- 「クローズ要求一覧」（`candidates.kind=completion`の承認/却下）で、候補に
+  `related_jira_key`が無い場合は対象タスクをLLMが自動推定せず、**画面上の`<select>`で
+  人間が選ぶ**（collector/extractor未実装のための代替。承認時はサーバー側で自動解決しない）。
+  また、collector/extractorが無いため実運用ではこの一覧に実データが投入されず、
+  `seed.go`のサンプルデータでのみ動作確認できる。
 
 ## 関連ドキュメント
 

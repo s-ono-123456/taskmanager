@@ -12,7 +12,7 @@ import (
 	"taskmanager/internal/taskstore"
 )
 
-// Server はDB接続とsqlc生成クエリを保持し、5つのルートを提供する。
+// Server はDB接続とsqlc生成クエリを保持し、7つのルートを提供する。
 type Server struct {
 	db *sql.DB
 	q  *taskstore.Queries
@@ -31,10 +31,16 @@ func (s *Server) Routes() *http.ServeMux {
 	mux.HandleFunc("POST /tasks/{id}/edit", s.handleEditTask)
 	mux.HandleFunc("POST /tasks/{id}/move", s.handleMoveTask)
 	mux.HandleFunc("POST /tasks/{id}/track", s.handleToggleTrack)
+	mux.HandleFunc("POST /candidates/{id}/approve", s.handleApproveCandidate)
+	mux.HandleFunc("POST /candidates/{id}/reject", s.handleRejectCandidate)
 	return mux
 }
 
 func parseTaskID(r *http.Request) (int64, error) {
+	return strconv.ParseInt(r.PathValue("id"), 10, 64)
+}
+
+func parseCandidateID(r *http.Request) (int64, error) {
 	return strconv.ParseInt(r.PathValue("id"), 10, 64)
 }
 
@@ -273,4 +279,102 @@ func (s *Server) handleToggleTrack(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.respondBoard(w, r, filter, toast)
+}
+
+// handleApproveCandidate はクローズ要求一覧(論点C3)の「承認」ボタン。
+// related_jira_keyがあればそのjira_keyでタスクを自動解決し、無ければフォームの
+// task_id(ユーザーが<select>で選んだ対象タスク)を使う。
+func (s *Server) handleApproveCandidate(w http.ResponseWriter, r *http.Request) {
+	filter := filterFromRequest(r)
+	id, err := parseCandidateID(r)
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	candidate, err := s.q.GetCandidate(r.Context(), id)
+	if errors.Is(err, sql.ErrNoRows) {
+		s.respondBoard(w, r, filter, &Toast{Category: "error", Message: "候補が見つかりません"})
+		return
+	} else if err != nil {
+		log.Printf("get candidate: %v", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if candidate.HumanVerdict.Valid && candidate.HumanVerdict.String != "" {
+		s.respondBoard(w, r, filter, &Toast{Category: "error", Message: "この候補は既に処理済みです"})
+		return
+	}
+
+	var task taskstore.Task
+	if candidate.RelatedJiraKey.Valid && candidate.RelatedJiraKey.String != "" {
+		task, err = s.q.GetTaskByJiraKey(r.Context(), sql.NullString{String: candidate.RelatedJiraKey.String, Valid: true})
+		if errors.Is(err, sql.ErrNoRows) {
+			s.respondBoard(w, r, filter, &Toast{
+				Category: "error",
+				Message:  fmt.Sprintf("対象タスク(%s)が見つかりません", candidate.RelatedJiraKey.String),
+			})
+			return
+		} else if err != nil {
+			log.Printf("get task by jira key: %v", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+	} else {
+		taskID, err := strconv.ParseInt(r.FormValue("task_id"), 10, 64)
+		if err != nil {
+			s.respondBoard(w, r, filter, &Toast{Category: "error", Message: "対象タスクを選択してください"})
+			return
+		}
+		task, err = s.q.GetTask(r.Context(), taskID)
+		if errors.Is(err, sql.ErrNoRows) {
+			s.respondBoard(w, r, filter, &Toast{Category: "error", Message: "対象タスクが見つかりません"})
+			return
+		} else if err != nil {
+			log.Printf("get task: %v", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if err := closeTask(r.Context(), s.q, task); err != nil {
+		log.Printf("close task: %v", err)
+		s.respondBoard(w, r, filter, &Toast{Category: "error", Message: "クローズに失敗しました"})
+		return
+	}
+	if err := s.q.UpdateCandidateVerdict(r.Context(), taskstore.UpdateCandidateVerdictParams{
+		HumanVerdict: sql.NullString{String: "correct", Valid: true},
+		ID:           id,
+	}); err != nil {
+		log.Printf("update candidate verdict: %v", err)
+		s.respondBoard(w, r, filter, &Toast{Category: "error", Message: "候補の更新に失敗しました"})
+		return
+	}
+
+	s.respondBoard(w, r, filter, &Toast{
+		Category: "success",
+		Message:  fmt.Sprintf("「%s」をクローズしました", task.Title),
+	})
+}
+
+// handleRejectCandidate はクローズ要求一覧(論点C3)の「却下」ボタン。
+// candidates.human_verdictをfalse_positiveにするのみで、タスク側は変更しない。
+func (s *Server) handleRejectCandidate(w http.ResponseWriter, r *http.Request) {
+	filter := filterFromRequest(r)
+	id, err := parseCandidateID(r)
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.q.UpdateCandidateVerdict(r.Context(), taskstore.UpdateCandidateVerdictParams{
+		HumanVerdict: sql.NullString{String: "false_positive", Valid: true},
+		ID:           id,
+	}); err != nil {
+		log.Printf("update candidate verdict: %v", err)
+		s.respondBoard(w, r, filter, &Toast{Category: "error", Message: "更新に失敗しました"})
+		return
+	}
+
+	s.respondBoard(w, r, filter, &Toast{Category: "success", Message: "候補を却下しました"})
 }

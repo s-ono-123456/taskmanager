@@ -146,6 +146,96 @@ func cardFromRow(row taskstore.ListTasksRow) Card {
 	}
 }
 
+// OpenTaskOption はクローズ要求一覧の<select>に表示する、対象候補となるタスク1件分。
+type OpenTaskOption struct {
+	ID    int64
+	Title string
+}
+
+// CloseRequest はクローズ要求一覧に表示する完了報告候補(candidates.kind=completion)
+// 1件分のビューモデル。
+type CloseRequest struct {
+	ID             int64
+	Summary        string
+	Target         string
+	Confidence     float64
+	RelatedJiraKey string
+	MsgSource      string
+	MsgChannel     string
+	MsgAuthor      string
+	MsgText        string
+	MsgReceivedAt  string
+	// OpenTasks はRelatedJiraKeyが空(対象タスクを一意に特定できない)の場合のみ、
+	// 選択肢として使う候補タスク一覧。
+	OpenTasks []OpenTaskOption
+}
+
+func closeRequestFromRow(row taskstore.ListPendingCompletionCandidatesRow) CloseRequest {
+	return CloseRequest{
+		ID:             row.ID,
+		Summary:        row.Summary.String,
+		Target:         row.Target.String,
+		Confidence:     row.Confidence.Float64,
+		RelatedJiraKey: row.RelatedJiraKey.String,
+		MsgSource:      row.MsgSource.String,
+		MsgChannel:     row.MsgChannel.String,
+		MsgAuthor:      row.MsgAuthor.String,
+		MsgText:        row.MsgText.String,
+		MsgReceivedAt:  row.MsgReceivedAt.String,
+	}
+}
+
+// LoadCloseRequests は承認待ちの完了報告候補(candidates.kind=completion、
+// human_verdict未設定)を取得する。related_jira_keyが無い候補には、対象を絞り込むための
+// 未クローズタスク一覧(ListOpenTasksByTarget)を付加する(論点C3: 人間がダッシュボード上で
+// 対象タスクを選ぶ)。
+func LoadCloseRequests(ctx context.Context, q *taskstore.Queries) ([]CloseRequest, error) {
+	rows, err := q.ListPendingCompletionCandidates(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list pending completion candidates: %w", err)
+	}
+
+	openTasksByTarget := make(map[string][]OpenTaskOption)
+	requests := make([]CloseRequest, 0, len(rows))
+	for _, row := range rows {
+		cr := closeRequestFromRow(row)
+		if cr.RelatedJiraKey == "" && cr.Target != "" {
+			opts, ok := openTasksByTarget[cr.Target]
+			if !ok {
+				taskRows, err := q.ListOpenTasksByTarget(ctx, cr.Target)
+				if err != nil {
+					return nil, fmt.Errorf("list open tasks by target: %w", err)
+				}
+				opts = make([]OpenTaskOption, len(taskRows))
+				for i, t := range taskRows {
+					opts[i] = OpenTaskOption{ID: t.ID, Title: t.Title}
+				}
+				openTasksByTarget[cr.Target] = opts
+			}
+			cr.OpenTasks = opts
+		}
+		requests = append(requests, cr)
+	}
+	return requests, nil
+}
+
+// closeTask はタスクをdoneにし、JIRA連携タスクならstubJiraTransitionを呼ぶ
+// (クローズ要求承認時の共通処理。edit/moveハンドラと同じclosedAtForTransitionを再利用する)。
+func closeTask(ctx context.Context, q *taskstore.Queries, task taskstore.Task) error {
+	closedAt := closedAtForTransition(task.Status, "done", task.ClosedAt)
+	if err := q.UpdateTaskStatus(ctx, taskstore.UpdateTaskStatusParams{
+		Status:   "done",
+		ClosedAt: closedAt,
+		ID:       task.ID,
+	}); err != nil {
+		return fmt.Errorf("update task status: %w", err)
+	}
+	if task.JiraKey.Valid {
+		stubJiraTransition(task.JiraKey.String, "close_via_completion_candidate")
+	}
+	return nil
+}
+
 // BoardFilter はGET /・各POST操作で共有するフィルタ状態。
 type BoardFilter struct {
 	Target        string
@@ -169,6 +259,7 @@ type BoardData struct {
 	DoneWindowDays int
 	Today          string
 	Toast          *Toast
+	CloseRequests  []CloseRequest
 }
 
 // LoadBoardData はGET /のフィルタ取得・グルーピング・7日フィルタ適用ロジックを、
@@ -206,6 +297,11 @@ func LoadBoardData(ctx context.Context, q *taskstore.Queries, filter BoardFilter
 		columns[card.Status] = append(columns[card.Status], card)
 	}
 
+	closeRequests, err := LoadCloseRequests(ctx, q)
+	if err != nil {
+		return BoardData{}, err
+	}
+
 	return BoardData{
 		Columns:        columns,
 		Statuses:       Statuses,
@@ -215,5 +311,6 @@ func LoadBoardData(ctx context.Context, q *taskstore.Queries, filter BoardFilter
 		ShowUntracked:  filter.ShowUntracked,
 		DoneWindowDays: DoneLaneWindowDays,
 		Today:          now.Format("2006-01-02"),
+		CloseRequests:  closeRequests,
 	}, nil
 }

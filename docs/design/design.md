@@ -67,7 +67,7 @@
 | テーブル | 役割 | 主な列 |
 |---|---|---|
 | `messages` | 収集した生メッセージ（本パイロットではseed.goの固定サンプルのみ） | `source`(mattermost/email/zoom), `channel_or_meeting`, `author`, `text`, `received_at`, `project_hint` |
-| `candidates` | メッセージから抽出したタスク/完了候補（本パイロットでは表示画面からは未使用、将来のextractor実装用に器のみ用意） | `kind`(task/completion), `confidence`, `target`, `due_date`, `human_verdict` |
+| `candidates` | メッセージから抽出したタスク/完了候補。`kind=task`の候補は表示画面からは未使用（将来のextractor実装用に器のみ）だが、`kind=completion`の候補（完了報告）は「クローズ要求一覧」画面（後述）が参照する | `kind`(task/completion), `confidence`, `target`, `due_date`, `human_verdict` |
 | `tasks` | ダッシュボードが実際に読み書きする本体 | `title`, `description`, `target`(jira_a/jira_b/personal), `status`(todo/in_progress/reviewing/done), `jira_key`, `created_at`, `closed_at`, `last_synced_at`, `tracked`(0/1), `due_date`(YYYY-MM-DD、nullable) |
 | `user_map` | 発言者⇔JIRAアカウントの対応（本パイロットでは表示画面からは未使用） | `source`, `source_user_id`, `jira_account_id`, `display_name` |
 
@@ -164,6 +164,8 @@
 | `POST /tasks/{id}/edit` | 編集モーダルからの保存。title/target/statusを検証し更新（due_dateは未入力ならNULLとして保存）。`status`が`done`へ/から変化する際は`closed_at`をその場で設定/クリアする |
 | `POST /tasks/{id}/move` | ドラッグ&ドロップからの状態変更。JIRA連携タスクなら`stubJiraTransition()`を呼ぶ |
 | `POST /tasks/{id}/track` | 「非表示」/「再表示」ボタン。後述の業務ルール参照 |
+| `POST /candidates/{id}/approve` | クローズ要求一覧の「承認」ボタン。後述の業務ルール参照 |
+| `POST /candidates/{id}/reject` | クローズ要求一覧の「却下」ボタン。`candidates.human_verdict`を`false_positive`にするのみ |
 | `GET /static/` | htmx.min.js等の静的ファイル配信（go:embed） |
 
 ## 「非表示」の業務ルール（`handleToggleTrack`）
@@ -175,6 +177,35 @@
   `stubJiraTransition(jiraKey, "resync")`を呼び、`last_synced_at`を現在時刻に更新する
   （実際のJIRA API通信はしない）。個人タスクの場合は`tracked`を戻すのみ。
 - 「削除」に相当する機能は存在しない（Flask版から変更なし）。
+
+## 「クローズ要求一覧」の業務ルール（`handleApproveCandidate`/`handleRejectCandidate`）
+
+タスク管理自動化構想の全体設計（`docs/design/task-management-automation.md`）でADR論点C3
+として採用した「完了候補の承認UI」の実装。`candidates`テーブル（`kind='completion'`かつ
+`human_verdict`が未設定の行）を一覧表示し、ツールバーの「クローズ要求」ボタン（承認待ち件数
+バッジ付き）からモーダルで開く。
+
+- **一覧の取得**: `ListPendingCompletionCandidates`で`kind='completion' AND
+  (human_verdict IS NULL OR human_verdict = '')`の行を取得する（`kanban.go`の
+  `LoadCloseRequests()`）。`related_jira_key`が空の候補には、`target`が一致し
+  `status != 'done' AND tracked = 1`のタスク一覧（`ListOpenTasksByTarget`）を選択肢として
+  付加する。
+- **承認（`related_jira_keyあり）**: サーバー側で`GetTaskByJiraKey`により対象タスクを自動解決
+  する。見つからなければエラートースト。
+- **承認（`related_jira_key`なし）**: フォームの`task_id`（画面上の`<select>`でユーザーが
+  選んだタスクID）を使う。未選択ならエラートースト（LLMによる自動推定は
+  collector/extractor未実装のため行わず、人間が選ぶ形で代替している）。
+- **承認の効果**: 対象タスクを`status='done'`に更新し、`closedAtForTransition`で`closed_at`
+  を設定（`closeTask()`関数、`edit`/`move`ハンドラと共通ロジック）。JIRA連携タスクなら
+  `stubJiraTransition(jiraKey, "close_via_completion_candidate")`を呼ぶ（実通信なし）。
+  `candidates.human_verdict`を`'correct'`に更新する。
+- **却下の効果**: `candidates.human_verdict`を`'false_positive'`に更新するのみ。対象タスクは
+  一切変更しない。
+- **画面の更新方式**: 一覧（`close-requests-container`）とツールバーの件数バッジ
+  （`close-requests-count`）はどちらも、トーストと同じ`hx-swap-oob="true"`パターンで
+  ボード操作のたびに再描画される（`boardAndToast`テンプレート）。モーダル本体は`#board`の
+  外にある静的な`<dialog>`要素のため、承認/却下後も開いたままになり、複数件を続けて
+  処理できる（自動で閉じる対象には含めていない）。
 
 ## デプロイ構成
 
@@ -221,7 +252,11 @@ docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$(pwd):/src" -w /src
 - `collector`/`extractor`/`syncer`/`registrar`（Mattermost/JIRA/Zoom/Claude APIとの実連携）は
   未実装。着手にはMattermost botトークン・JIRA APIトークン・Zoom Server-to-Server OAuthアプリの
   準備、`project_routing`/`user_map`の初期データ整備が必要（ユーザー側準備待ち）。
-- `candidates`・`user_map`テーブルは器のみ用意されており、画面・業務ロジックからは未使用。
+- `user_map`テーブル、および`candidates`テーブルのうち`kind=task`の候補は器のみ用意されており
+  画面・業務ロジックからは未使用（collector/extractor未実装のため実データは投入されない）。
+  `kind=completion`の候補は「クローズ要求一覧」画面が参照するが、collector/extractorが
+  無いため実運用ではこのテーブルにデータが投入されず、画面は空のままになる
+  （現状は`seed.go`のサンプルデータでのみ動作確認できる）。
 - 認証・アクセス制御は無い。外部公開しない前提（既定では`127.0.0.1`バインド、Docker運用時も
   LAN内利用を想定）。
 - JS無効時、編集/新規作成フォーム・非表示切替ボタンは通常のHTMLフォーム送信（トップレベル

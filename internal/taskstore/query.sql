@@ -67,3 +67,30 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 -- name: InsertUserMap :exec
 INSERT INTO user_map (source, source_user_id, jira_account_id, display_name)
 VALUES (?, ?, ?, ?);
+
+-- name: ListPendingCompletionCandidates :many
+SELECT candidates.*,
+       messages.source AS msg_source,
+       messages.channel_or_meeting AS msg_channel,
+       messages.author AS msg_author,
+       messages.text AS msg_text,
+       messages.received_at AS msg_received_at
+FROM candidates
+LEFT JOIN messages ON candidates.message_id = messages.id
+WHERE candidates.kind = 'completion'
+  AND (candidates.human_verdict IS NULL OR candidates.human_verdict = '')
+ORDER BY candidates.id;
+
+-- name: GetCandidate :one
+SELECT * FROM candidates WHERE id = ?;
+
+-- name: UpdateCandidateVerdict :exec
+UPDATE candidates SET human_verdict = ? WHERE id = ?;
+
+-- name: GetTaskByJiraKey :one
+SELECT * FROM tasks WHERE jira_key = ? LIMIT 1;
+
+-- name: ListOpenTasksByTarget :many
+SELECT * FROM tasks
+WHERE target = ? AND status != 'done' AND tracked = 1
+ORDER BY created_at DESC;

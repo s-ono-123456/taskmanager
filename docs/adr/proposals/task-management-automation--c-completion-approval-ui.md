@@ -36,11 +36,14 @@
   だけの軽量な通知を送る（詳細確認・承認操作自体はダッシュボードで行う）構成も、必要になれば
   追加で検討してよい。
 
-C3自体はダッシュボード側にまだ実装しておらず、今後の実装タスクとして残っている
-（`docs/design/task-management-automation.md`の「想定される次の一手」参照）。
+C3はダッシュボード側（「クローズ要求一覧」画面、`POST /candidates/{id}/approve`・
+`POST /candidates/{id}/reject`）に実装済み。ただし実データを投入するcollector/extractorが
+未実装のため、実運用ではこの画面にデータが表示されない（現状は`seed.go`のサンプルデータで
+のみ動作確認できる）。
 
 ## 関連する設計ドキュメント
 
 - `docs/design/task-management-automation.md`（完了候補提示・クローズ、日次まとめの構成。
   C3採用に伴い更新済み）
+- `docs/design/design.md`（「クローズ要求一覧」の業務ルール・ルート一覧。C3の実装詳細）
 - `docs/design/design.md`（C3が画面追加先とするダッシュボードWebアプリの現行仕様）

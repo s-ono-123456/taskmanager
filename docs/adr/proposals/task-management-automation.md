@@ -52,8 +52,7 @@
    と`user_map`（主要メンバーの初期データ）を整備する。
 3. collector（mattermost/email/zoom）・extractor・registrar（JIRA登録/個人タスク登録）・
    digest（新規登録・対象不明タスクの日次まとめ投稿）を実装する（管理画面（ダッシュボード）
-   はスキーマ含めパイロット実装済み。`docs/design/design.md`参照）。
-4. ダッシュボードに「クローズ要求一覧」画面（論点C3の採用結果）を実装する。
-   `docs/design/task-management-automation.md`の「完了候補提示・クローズ」参照。
-5. 運用開始後、precision/recall（登録・クローズ候補それぞれ）を継続的にモニタリングし、
+   はスキーマ・クローズ要求一覧画面（論点C3）含めパイロット実装済み。`docs/design/design.md`
+   参照）。
+4. 運用開始後、precision/recall（登録・クローズ候補それぞれ）を継続的にモニタリングし、
    プロンプト・`project_routing`・confidence閾値を調整する。

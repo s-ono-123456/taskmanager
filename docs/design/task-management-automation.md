@@ -269,9 +269,12 @@ statusの粒度は[論点E](../adr/proposals/task-management-automation--e-statu
 の採用結果。
 
 **クローズ要求一覧（[論点C](../adr/proposals/task-management-automation--c-completion-approval-ui.md)
-のC3で採用、現時点のパイロット実装にはまだ無い）**: `candidates`のうち`kind=completion`かつ
-`human_verdict`が未設定の行を一覧表示し、承認/却下をワンクリックで行える画面をダッシュボードに
-追加する想定。詳細は前節「完了候補提示・クローズ」参照。
+のC3で採用、パイロット実装済み）**: `candidates`のうち`kind=completion`かつ`human_verdict`が
+未設定の行を一覧表示し、承認/却下をワンクリックで行える画面をダッシュボードに追加した
+（`POST /candidates/{id}/approve`・`POST /candidates/{id}/reject`）。詳細は前節
+「完了候補提示・クローズ」、実装の詳細は`docs/design/design.md`の「クローズ要求一覧」の
+業務ルール節を参照。ただし実データを投入するcollector/extractorが未実装のため、実運用では
+この画面にデータが表示されない（現状は`seed.go`のサンプルデータでのみ動作確認できる）。
 
 ## 日次まとめ（digest）の構成
 
@@ -312,10 +315,8 @@ Python（リポジトリの既存方針どおりルートの`.venv`/uv環境を�
    と`user_map`（主要メンバーの初期データ）を整備する。
 3. collector（mattermost/email/zoom）・extractor・registrar（JIRA登録/個人タスク登録）・
    digest（新規登録・対象不明タスクの日次まとめ投稿）を実装する（管理画面（ダッシュボード）
-   はスキーマ含めパイロット実装済み。`docs/design/design.md`参照）。
-4. ダッシュボードに「クローズ要求一覧」画面（論点C3の採用結果、上記「完了候補提示・クローズ」
-   参照）を実装する。
-5. 運用開始後、precision/recall（登録・クローズ候補それぞれ）を継続的にモニタリングし、
+   はスキーマ・クローズ要求一覧画面含めパイロット実装済み。`docs/design/design.md`参照）。
+4. 運用開始後、precision/recall（登録・クローズ候補それぞれ）を継続的にモニタリングし、
    プロンプト・`project_routing`・confidence閾値を調整する。
 
 ## 関連ドキュメント

@@ -64,6 +64,12 @@ var seedMessages = []seedMessage{
 	{"zoom", "meeting-3001", "定例会議 2026-09-10", "(meeting summary)",
 		"Next steps: ログ基盤の調査を進める / UIレビューを来週までに完了する",
 		"2026-09-10T18:00:00", "", "jira_a"},
+	{"mattermost", "post-1003", "#project-a", "tanaka",
+		"API仕様書のドラフトを完成させました。ご確認お願いします",
+		"2026-09-12T14:00:00", "", "jira_a"},
+	{"email", "msg-2002", "inbox/personal", "yamada@example.com",
+		"経費精算の提出、終わりました",
+		"2026-09-12T16:00:00", "", "personal"},
 }
 
 var seedCandidates = []seedCandidate{
@@ -77,6 +83,10 @@ var seedCandidates = []seedCandidate{
 		"ログ基盤の調査", "", ""},
 	{3, "task", 0.4, "unknown", "", "", "",
 		"UIレビューを来週までに完了する", "", ""},
+	{4, "completion", 0.8, "jira_a", "tanaka", "tanaka.k", "",
+		"API仕様書ドラフト完成の報告", "PROJA-101", ""},
+	{5, "completion", 0.65, "personal", "yamada@example.com", "", "",
+		"経費精算完了の報告", "", ""},
 }
 
 var seedTasks = []seedTask{
