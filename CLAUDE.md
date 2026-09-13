@@ -5,15 +5,17 @@
 タスク管理自動化構想（JIRA2プロジェクト＋個人タスクをMattermost/メール/Zoomから
 自動収集し、JIRA自動起票・完了候補提示まで行う）のうち、「スキーマとダッシュボード
 UIのパイロット実装」に相当するリポジトリ。**外部通信は原則行わない**が、唯一の例外として
-Mattermost collector（`internal/mattermost/`、収集のみ。2026-09-13追加）は実際にMattermost
-APIへポーリング接続する（Bot Token等の認証情報はユーザーが環境変数で設定、未設定なら
-起動しない）。メール/Zoom/JIRA/Claude APIへは引き続き一切接続せず、JIRA連携相当の操作は
-すべて`stubJiraTransition()`によるログ出力のみ。
+Mattermost collector兼extractor（`internal/mattermost/`。2026-09-13追加、同日にAI分類機能を
+拡張）は実際にMattermost APIへポーリング接続し、取得した投稿をこのホスト上の
+ローカルLLM（llama-swap、外部ではない）で分類する（Bot Token等の認証情報はユーザーが
+環境変数で設定、未設定なら起動しない）。メール/Zoom/JIRA/Claude APIへは引き続き一切
+接続せず、JIRA連携相当の操作はすべて`stubJiraTransition()`によるログ出力のみ。
 
 プロジェクト概要・技術スタック・ディレクトリ構成・実行方法は`README.md`を参照。
 詳細設計は`docs/design/`配下に分割している: 全体方針は`docs/design/design.md`、
 DB設計は`docs/design/data-model.md`、画面設計は`docs/design/screen-board.md`
-（カンバンボード）・`docs/design/screen-close-requests.md`（クローズ要求一覧）を参照。
+（カンバンボード）・`docs/design/screen-close-requests.md`（クローズ要求一覧）・
+`docs/design/screen-task-candidates.md`（タスク候補一覧）を参照。
 
 ## 誤解しやすい業務ルール（詳細は`docs/design/screen-board.md`・`docs/design/screen-close-requests.md`参照）
 
@@ -38,16 +40,19 @@ DB設計は`docs/design/data-model.md`、画面設計は`docs/design/screen-boar
   `target`（タスクの対象）と名前が衝突するのを避けるため。
 - 「クローズ要求一覧」（`candidates.kind=completion`の承認/却下）で、候補に
   `related_jira_key`が無い場合は対象タスクをLLMが自動推定せず、**画面上の`<select>`で
-  人間が選ぶ**（extractor未実装のための代替。承認時はサーバー側で自動解決しない）。
-  また、extractorが無いため実運用ではこの一覧に実データが投入されず、
-  `seed.go`のサンプルデータでのみ動作確認できる。
+  人間が選ぶ**（Mattermost extractorはメッセージ本文にJIRAキーが明示されている場合のみ
+  抽出し、未クローズタスク一覧からの対象推定は行わないため。承認時はサーバー側で自動解決しない）。
 - **優先度(`priority`)は表示専用**（最高/高/中/低、デフォルト「中」）。カード上のバッジ
   表示のみで、並び順（`created_at DESC`固定）・レーン/ステータス構造には一切影響しない。
   編集・新規作成モーダルで変更可能だが、ドラッグ&ドロップ（`/tasks/{id}/move`）では
   変更されない。
-- **Mattermost collectorは収集のみ**（`internal/mattermost/`）。実際に`messages`テーブルへ
-  実データを保存するが、そこからのタスク自動抽出（extractor）・JIRA自動起票は行わない
-  （未実装）。`MATTERMOST_BOT_TOKEN`が未設定の環境では起動自体しない。
+- **Mattermost extractorは収集+ローカルLLMでの取得時分類+確定target分の自動タスク登録**
+  （`internal/mattermost/`）。`kind=task`かつ`target`確定なら即`tasks`へ自動登録
+  （`candidates.human_verdict='auto_registered'`）、`target`不明なら「タスク候補一覧」画面へ、
+  `kind=completion`なら既存の「クローズ要求一覧」画面へ。`kind=none`・低信頼度の投稿は
+  `messages`テーブルにすら保存しない（破棄）。`MATTERMOST_BOT_TOKEN`が未設定の環境では
+  起動自体しない。ComfyUIと同一GPUを排他利用しており、抽出処理実行時にComfyUI生成ジョブが
+  強制停止されうるが許容する方針（回避ロジックなし）。
 
 ## 関連ドキュメント
 
@@ -59,12 +64,13 @@ DB設計は`docs/design/data-model.md`、画面設計は`docs/design/screen-boar
 - `docs/design/data-model.md`（本リポジトリ内） — DB設計（テーブル定義・マイグレーション）。
 - `docs/design/screen-board.md`（本リポジトリ内） — 画面設計: カンバンボード画面。
 - `docs/design/screen-close-requests.md`（本リポジトリ内） — 画面設計: クローズ要求一覧画面。
+- `docs/design/screen-task-candidates.md`（本リポジトリ内） — 画面設計: タスク候補一覧画面。
 - `docs/adr/proposals/`・`docs/adr/complete/`（本リポジトリ内） — 全体構想のADR。
   意思決定の経緯（案の比較・採用理由）を論点ごとのファイルに分けて記録している
   （実装まで完了したものは`complete/`）。
 - `docs/design/task-management-automation.md`（本リポジトリ内） — 全体構想のうち、まだ
-  未実装のextractor/syncer/registrar/digest（およびメール/Zoom collector）を含む確定設計
-  （データモデル・パイプライン全体像。Mattermost collectorは実装済み）。
+  未実装のsyncer/registrar（実JIRA通信）/digest（およびメール/Zoom collector）を含む確定設計
+  （データモデル・パイプライン全体像。Mattermost collector兼extractorは実装済み）。
 - `docs/adr/README.md`（本リポジトリ内） — ADRとdocs/design/の役割分担・ファイル構成の
   運用ルール。
 - `docs/session-context.md` / `docs/task-queue.md` / `docs/work-log.md`（本リポジトリ内） —

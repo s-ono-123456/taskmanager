@@ -54,6 +54,13 @@ function bindCardActions() {
           [card.dataset.msgSource, card.dataset.msgChannel, card.dataset.msgAuthor, card.dataset.msgReceivedAt]
             .filter(Boolean).join(' ・ ');
         document.getElementById('edit-info-message-text').textContent = card.dataset.msgText;
+        var messageUrl = document.getElementById('edit-info-message-url');
+        if (card.dataset.msgUrl) {
+          messageUrl.href = card.dataset.msgUrl;
+          messageUrl.classList.remove('hidden');
+        } else {
+          messageUrl.classList.add('hidden');
+        }
       } else {
         messageBox.classList.add('hidden');
       }
@@ -117,6 +124,24 @@ document.getElementById('close-requests-cancel').addEventListener('click', funct
 closeRequestsModal.addEventListener('click', function (ev) {
   if (ev.target === closeRequestsModal) {
     closeRequestsModal.close();
+  }
+});
+
+// タスク候補一覧モーダル。クローズ要求一覧と同じく、連続して承認/却下できるよう
+// 送信後も自動では閉じない。
+var taskCandidatesModal = document.getElementById('task-candidates-modal');
+
+document.getElementById('task-candidates-btn').addEventListener('click', function () {
+  taskCandidatesModal.showModal();
+});
+
+document.getElementById('task-candidates-cancel').addEventListener('click', function () {
+  taskCandidatesModal.close();
+});
+
+taskCandidatesModal.addEventListener('click', function (ev) {
+  if (ev.target === taskCandidatesModal) {
+    taskCandidatesModal.close();
   }
 });
 

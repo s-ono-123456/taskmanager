@@ -179,6 +179,7 @@ type Card struct {
 	MsgAuthor      string
 	MsgText        string
 	MsgReceivedAt  string
+	MsgURL         string // 元投稿へのパーマリンク(nullable)
 }
 
 func cardFromRow(row taskstore.ListTasksRow) Card {
@@ -201,6 +202,7 @@ func cardFromRow(row taskstore.ListTasksRow) Card {
 		MsgAuthor:      row.MsgAuthor.String,
 		MsgText:        row.MsgText.String,
 		MsgReceivedAt:  row.MsgReceivedAt.String,
+		MsgURL:         row.MsgUrl.String,
 	}
 }
 
@@ -223,6 +225,7 @@ type CloseRequest struct {
 	MsgAuthor      string
 	MsgText        string
 	MsgReceivedAt  string
+	MsgURL         string // 元投稿へのパーマリンク(nullable)
 	// OpenTasks はRelatedJiraKeyが空(対象タスクを一意に特定できない)の場合のみ、
 	// 選択肢として使う候補タスク一覧。
 	OpenTasks []OpenTaskOption
@@ -240,6 +243,7 @@ func closeRequestFromRow(row taskstore.ListPendingCompletionCandidatesRow) Close
 		MsgAuthor:      row.MsgAuthor.String,
 		MsgText:        row.MsgText.String,
 		MsgReceivedAt:  row.MsgReceivedAt.String,
+		MsgURL:         row.MsgUrl.String,
 	}
 }
 
@@ -275,6 +279,77 @@ func LoadCloseRequests(ctx context.Context, q *taskstore.Queries) ([]CloseReques
 		requests = append(requests, cr)
 	}
 	return requests, nil
+}
+
+// TaskCandidate はタスク候補一覧に表示するタスク検知候補(candidates.kind=task、
+// target=unknown等、Mattermost extractorが自動登録しなかったもの)1件分のビューモデル。
+type TaskCandidate struct {
+	ID            int64
+	Summary       string
+	Target        string // 検知時点の推定target(unknownの場合、承認時にユーザーが選び直す)
+	Confidence    float64
+	AssigneeRaw   string
+	DueDate       string
+	MsgSource     string
+	MsgChannel    string
+	MsgAuthor     string
+	MsgText       string
+	MsgReceivedAt string
+	MsgURL        string
+}
+
+func taskCandidateFromRow(row taskstore.ListPendingTaskCandidatesRow) TaskCandidate {
+	return TaskCandidate{
+		ID:            row.ID,
+		Summary:       row.Summary.String,
+		Target:        row.Target.String,
+		Confidence:    row.Confidence.Float64,
+		AssigneeRaw:   row.AssigneeRaw.String,
+		DueDate:       row.DueDate.String,
+		MsgSource:     row.MsgSource.String,
+		MsgChannel:    row.MsgChannel.String,
+		MsgAuthor:     row.MsgAuthor.String,
+		MsgText:       row.MsgText.String,
+		MsgReceivedAt: row.MsgReceivedAt.String,
+		MsgURL:        row.MsgUrl.String,
+	}
+}
+
+// LoadTaskCandidates は承認待ちのタスク検知候補(candidates.kind=task、human_verdict未設定)を
+// 取得する(Mattermost extractorがtarget確定で自動登録した分はhuman_verdict='auto_registered'
+// が設定済みのため、ここには現れない)。
+func LoadTaskCandidates(ctx context.Context, q *taskstore.Queries) ([]TaskCandidate, error) {
+	rows, err := q.ListPendingTaskCandidates(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list pending task candidates: %w", err)
+	}
+	candidates := make([]TaskCandidate, len(rows))
+	for i, row := range rows {
+		candidates[i] = taskCandidateFromRow(row)
+	}
+	return candidates, nil
+}
+
+// createTaskFromCandidate はタスク候補一覧の承認時に、候補内容とユーザーが選んだtargetから
+// 新規タスクを作成する(handleNewTaskのCreateTask呼び出しと同型)。
+func createTaskFromCandidate(ctx context.Context, q *taskstore.Queries, candidate taskstore.Candidate, target string) (taskstore.Task, error) {
+	task, err := q.CreateTask(ctx, taskstore.CreateTaskParams{
+		SourceMessageID: sql.NullInt64{Int64: candidate.MessageID, Valid: true},
+		Title:           candidate.Summary.String,
+		Target:          target,
+		Status:          "todo",
+		CreatedAt:       nowISO(),
+		Tracked:         1,
+		DueDate:         candidate.DueDate,
+		Priority:        "medium",
+	})
+	if err != nil {
+		return taskstore.Task{}, fmt.Errorf("create task: %w", err)
+	}
+	if target == "jira_a" || target == "jira_b" {
+		stubJiraTransition("(未発行)", "create_via_task_candidate")
+	}
+	return task, nil
 }
 
 // closeTask はタスクをdoneにし、JIRA連携タスクならstubJiraTransitionを呼ぶ
@@ -322,6 +397,7 @@ type BoardData struct {
 	Today          string
 	Toast          *Toast
 	CloseRequests  []CloseRequest
+	TaskCandidates []TaskCandidate
 }
 
 // LoadBoardData はGET /のフィルタ取得・グルーピング・7日フィルタ適用ロジックを、
@@ -368,6 +444,11 @@ func LoadBoardData(ctx context.Context, q *taskstore.Queries, filter BoardFilter
 		return BoardData{}, err
 	}
 
+	taskCandidates, err := LoadTaskCandidates(ctx, q)
+	if err != nil {
+		return BoardData{}, err
+	}
+
 	return BoardData{
 		Columns:        columns,
 		Lanes:          Lanes,
@@ -382,5 +463,6 @@ func LoadBoardData(ctx context.Context, q *taskstore.Queries, filter BoardFilter
 		DoneWindowDays: DoneLaneWindowDays,
 		Today:          now.Format("2006-01-02"),
 		CloseRequests:  closeRequests,
+		TaskCandidates: taskCandidates,
 	}, nil
 }

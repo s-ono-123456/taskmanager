@@ -24,8 +24,9 @@ human_verdict = '')`の行を取得する（`internal/web/kanban.go`の`LoadClos
 - **承認（`related_jira_key`あり）**: サーバー側で`GetTaskByJiraKey`により対象タスクを
   自動解決する。見つからなければエラートースト。
 - **承認（`related_jira_key`なし）**: フォームの`task_id`（画面上の`<select>`でユーザーが
-  選んだタスクID）を使う。未選択ならエラートースト（LLMによる自動推定は
-  extractor未実装のため行わず、人間が選ぶ形で代替している）。
+  選んだタスクID）を使う。未選択ならエラートースト（Mattermost extractorはメッセージ本文に
+  JIRAキーが明示されている場合のみ`related_jira_key`を抽出し、未クローズタスク一覧からの
+  対象推定までは行わないため、人間が選ぶ形で代替している）。
 - **承認の効果**: 対象タスクを`status='done'`に更新し、`closedAtForTransition`で`closed_at`
   を設定（`closeTask()`関数、`edit`/`move`ハンドラと共通ロジック）。JIRA連携タスクなら
   `stubJiraTransition(jiraKey, "close_via_completion_candidate")`を呼ぶ（実通信なし）。
@@ -48,12 +49,14 @@ human_verdict = '')`の行を取得する（`internal/web/kanban.go`の`LoadClos
 | `POST /candidates/{id}/approve` | 「承認」ボタン。上記の業務ルール参照 |
 | `POST /candidates/{id}/reject` | 「却下」ボタン。`candidates.human_verdict`を`false_positive`にするのみ |
 
-## 現状の制約
+## 実データの投入元
 
-extractorが未実装のため（Mattermost collectorは実装済みで`messages`テーブルへ実データが
-溜まるが、そこから`candidates`への変換は行われない）、実運用では`candidates`テーブルに
-`kind=completion`のデータが投入されず、この画面は空のままになる。現状は
-`internal/taskstore/seed.go`のサンプルデータでのみ動作確認できる。
+Mattermost extractor（`internal/mattermost/`、`docs/design/data-model.md`「Mattermost
+extractor」節参照）が、Mattermostの発言をローカルLLMで分類し、完了報告と判定したものを
+`kind=completion`の候補として`candidates`へ書き込む。これにより本画面に初めて実データが
+投入されるようになった（それ以前は`internal/taskstore/seed.go`のサンプルデータのみで
+動作確認していた）。メール/Zoom収集は未実装のため、それらのソースからの完了報告候補は
+引き続き投入されない。
 
 ## 関連ドキュメント
 

@@ -26,5 +26,13 @@ services:
       MATTERMOST_BOT_TOKEN: ${MATTERMOST_BOT_TOKEN:-}
       MATTERMOST_SERVER_URL: ${MATTERMOST_SERVER_URL:-}
       MATTERMOST_CHANNEL_ROUTES: ${MATTERMOST_CHANNEL_ROUTES:-}
+      # Mattermost extractorが分類に使うローカルLLM(llama-swap、外部通信ではなくホスト上の
+      # サービスへの接続)。未設定時のデフォルトはinternal/mattermost.LoadConfigFromEnv参照。
+      MATTERMOST_EXTRACTOR_LLM_URL: ${MATTERMOST_EXTRACTOR_LLM_URL:-}
+      MATTERMOST_EXTRACTOR_LLM_MODEL: ${MATTERMOST_EXTRACTOR_LLM_MODEL:-}
+    # host.docker.internal経由でホスト上のllama-swap(ポート8080)へ到達するため
+    # (Linuxのbridgeネットワークではhost.docker.internalが既定で解決されないため明示指定)。
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - /docker/task-dashboard/data:/data

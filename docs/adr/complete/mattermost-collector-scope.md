@@ -34,3 +34,12 @@ grillingスキルでの確認により、段階的な範囲拡大（まず収集
 - `docs/design/task-management-automation.md`（全体パイプライン設計）
 - `docs/adr/complete/collection-trigger.md`（収集トリガー方式=cron定期ポーリング、既に決定済み。
   今回の実装で実際に使用する）
+
+## 追記: 抽出(extractor)への拡張（2026-09-13）
+
+実際に収集のみで稼働させたところ、ユーザーから「メッセージを全部保存するだけでは意味がない」
+との指摘があり、同日中に「収集のみ」から「収集+ローカルLLMでの取得時分類+確定target分の
+自動タスク登録」へ拡張した（案2で懸念していたClaude API/JIRA APIは使わず、ローカルLLMのみ
+追加したため、当初の「一度に複数方針を覆す」というリスクは実質発生していない）。詳細は
+`docs/adr/complete/mattermost-extractor-llm-choice.md`・`mattermost-extractor-registration-flow.md`・
+`mattermost-extractor-batching.md`・`mattermost-message-retention.md`を参照。

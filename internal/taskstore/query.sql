@@ -4,7 +4,8 @@ SELECT tasks.*,
        messages.channel_or_meeting AS msg_channel,
        messages.author AS msg_author,
        messages.text AS msg_text,
-       messages.received_at AS msg_received_at
+       messages.received_at AS msg_received_at,
+       messages.permalink_url AS msg_url
 FROM tasks
 LEFT JOIN messages ON tasks.source_message_id = messages.id
 WHERE (sqlc.narg('target') IS NULL OR tasks.target = sqlc.narg('target'))
@@ -66,8 +67,8 @@ DELETE FROM messages;
 DELETE FROM user_map;
 
 -- name: InsertMessage :one
-INSERT INTO messages (source, source_id, channel_or_meeting, author, text, received_at, thread_id, project_hint)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO messages (source, source_id, channel_or_meeting, author, text, received_at, thread_id, project_hint, permalink_url)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id;
 
 -- name: InsertCandidate :exec
@@ -84,10 +85,25 @@ SELECT candidates.*,
        messages.channel_or_meeting AS msg_channel,
        messages.author AS msg_author,
        messages.text AS msg_text,
-       messages.received_at AS msg_received_at
+       messages.received_at AS msg_received_at,
+       messages.permalink_url AS msg_url
 FROM candidates
 LEFT JOIN messages ON candidates.message_id = messages.id
 WHERE candidates.kind = 'completion'
+  AND (candidates.human_verdict IS NULL OR candidates.human_verdict = '')
+ORDER BY candidates.id;
+
+-- name: ListPendingTaskCandidates :many
+SELECT candidates.*,
+       messages.source AS msg_source,
+       messages.channel_or_meeting AS msg_channel,
+       messages.author AS msg_author,
+       messages.text AS msg_text,
+       messages.received_at AS msg_received_at,
+       messages.permalink_url AS msg_url
+FROM candidates
+LEFT JOIN messages ON candidates.message_id = messages.id
+WHERE candidates.kind = 'task'
   AND (candidates.human_verdict IS NULL OR candidates.human_verdict = '')
 ORDER BY candidates.id;
 
@@ -108,5 +124,10 @@ ORDER BY created_at DESC;
 -- name: MessageExistsBySourceID :one
 SELECT EXISTS(SELECT 1 FROM messages WHERE source = ? AND source_id = ?);
 
--- name: LastMessageReceivedAt :one
-SELECT CAST(COALESCE(MAX(received_at), '') AS TEXT) FROM messages WHERE source = 'mattermost' AND channel_or_meeting = ?;
+-- name: GetMattermostChannelState :one
+SELECT last_processed_at FROM mattermost_channel_state WHERE channel_id = ?;
+
+-- name: UpsertMattermostChannelState :exec
+INSERT INTO mattermost_channel_state (channel_id, last_processed_at)
+VALUES (?, ?)
+ON CONFLICT(channel_id) DO UPDATE SET last_processed_at = excluded.last_processed_at;

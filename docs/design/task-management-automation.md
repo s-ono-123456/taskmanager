@@ -4,9 +4,12 @@
 
 本ドキュメントは、タスク管理自動化構想（JIRA2プロジェクト＋個人タスクをMattermost/メール/
 Zoomから自動収集し、JIRA自動起票・完了候補提示まで行う）のうち、**まだ実装されていない
-`extractor`/`syncer`/`registrar`/`digest`部分の確定した設計**をまとめたものである
-（`collector`のうちMattermost分は2026-09-13にGoで実装済み。`docs/design/data-model.md`
-「Mattermost collector（収集のみ）」参照。メール/Zoom collectorは未実装）。
+`syncer`/`registrar`（実JIRA通信）/`digest`部分の確定した設計**をまとめたものである
+（Mattermost分の`collector`+`extractor`+個人タスク/確定target分の`registrar`相当は
+2026-09-13にGoで実装済み。`docs/design/data-model.md`「Mattermost extractor」節参照。
+メール/Zoom collectorは未実装）。**Mattermostの実装は、下記の全体パイプライン図が想定する
+「収集→蓄積→バッチ抽出」の流れとは異なり、取得時にその場でローカルLLM分類する設計になって
+いる**（詳細・差異は後述「抽出・分類」節参照）。
 各設計判断がなぜそうなったか（比較した案・採用理由）は、本書の各所からリンクしている
 `docs/adr/proposals/`・`docs/adr/complete/`配下の論点ファイル（決定済みかつ実装済みのものは
 `complete/`、実装がまだのものは`proposals/`）を参照。
@@ -73,6 +76,14 @@ flowchart TD
 - **完了候補提示/実行**: クローズ候補（`kind=completion`）はMattermostではなく、ダッシュボード
   の「クローズ要求一覧」画面にDBから随時表示する。実際にクローズを実行するのは、ユーザーが
   この画面で任意のタイミングで承認した分のみ。
+
+**上図はメール/Zoomも含めた全体構想の概念図であり、Mattermost分の実装（2026-09-13）は
+これと部分的に異なる**: `messages`への蓄積とバッチ抽出(`EXT`)を分離せず、収集した投稿を
+その場で分類し、`kind=none`または低信頼度の投稿は`messages`にすら保存せず破棄する
+（`docs/adr/complete/mattermost-message-retention.md`参照）。また`EXT`はClaude APIではなく
+このホスト上のローカルLLMを使う（`docs/adr/complete/mattermost-extractor-llm-choice.md`参照）。
+メール/Zoom実装時にこの図の通りの「蓄積してから一括抽出」方式にするか、Mattermostと同様
+「取得時に都度分類」方式にするかは、着手時に改めて検討する。
 
 上図のクローズ候補まわり（CLOSE1/CLOSE2 → ダッシュボード → 承認 → EXEC）は
 [完了候補の承認UI](../adr/complete/completion-approval-ui.md)で採用した
@@ -150,33 +161,50 @@ DBスキーマ・ER図は`docs/design/data-model.md`を参照（パイロット�
 ## 抽出・分類
 
 外部LLM APIへの送信可否は[外部LLM API送信可否](../adr/proposals/data-handling-policy.md)
-で確認済み。
+で確認済み（メール/Zoom想定、Claude API等の外部LLM向け）。
 
-Claude APIに本文＋`project_hint`をコンテキストとして渡し、`kind/confidence/target/assignee_raw/
-due_date/summary`を構造化JSONで抽出する。`target`は`project_hint`があれば強い手がかりとして使う
-が、本文の内容と矛盾する場合は本文を優先し`confidence`を下げさせる。`assignee_raw`は生の名前/
-メールアドレスのまま出力させ、後段で`user_map`を引いて`jira_account_id`に解決する（解決できな
-ければ未設定のまま日次まとめで人間に確認を仰ぐ）。不明な項目は断定させず`unknown`とする。
+**Mattermost分は実装済み**（`internal/mattermost/llm.go`）で、上記とは異なりこのホスト上の
+ローカルLLM（llama-swap、外部通信ではない）を使う（`docs/adr/complete/mattermost-extractor-llm-choice.md`
+参照）。取得した投稿をスレッド全文＋`project_hint`とともにローカルLLMへ渡し、
+`kind/confidence/target/assignee_raw/due_date/summary/related_jira_key`を構造化JSON
+（`response_format: json_object`）で抽出する。`target`は`project_hint`を手がかりに使うが、
+本文の内容と矛盾する場合は本文を優先し`confidence`を下げさせる、不明な項目は断定させず
+`unknown`/空文字のままにする、という方針は当初の設計を踏襲している。`assignee_raw`は生の
+名前のまま保存し、`jira_account_id`への解決（`user_map`使用）は行っていない
+（未整備のため未設定のまま）。
+
+メール/Zoom分は未実装のため、上記のClaude API前提の設計のまま残している。
 
 ## 登録（Registrar）
+
+**Mattermost分（`kind=task`）は実装済み**（`internal/mattermost/collector.go`の
+`registerCandidate`）。当初の設計（`candidates`へ書いてから別プロセスのregistrarが読む）とは
+異なり、抽出と同じ処理の中で即座に判定する。
+
+- **自動登録**: `target`が`jira_a`/`jira_b`/`personal`のいずれかに確定していれば、その場で
+  `tasks`へ登録する（`jira_a`/`jira_b`はJIRA起票スタブのログのみ、実通信はしない）。
+  `candidates.human_verdict`に`'auto_registered'`を設定し、判定根拠として残す。
+- **対象不明（`target=unknown`）**: 自動登録せず、`candidates`に保留のまま残し、ダッシュボードの
+  「タスク候補一覧」画面（`docs/design/screen-task-candidates.md`参照）で人間が対象を指定して
+  承認したときのみ登録する（日次まとめ(digest)は使わない。digest自体が未実装のため）。
+  比較検討の経緯は`docs/adr/complete/mattermost-extractor-registration-flow.md`参照。
+
+メール/Zoom分（JIRA実APIへの起票）は未実装のため、以下は当初の設計のまま残している。
 
 - **JIRA登録**: `target`が`jira_a`/`jira_b`で確定した候補はJIRA REST API
   （`POST /rest/api/2/issue`）で起票。descriptionに元発言/メール/会議へのリンクと引用を残す。
   `assignee`が解決できていれば設定し、できていなければ未設定で起票（担当者未設定の起票がある旨
   は日次まとめに含める）。
-- **個人タスク登録**: `target=personal`の候補は自前ストア（`tasks`テーブル、`jira_key`はNULL）
-  に登録する。
-- **対象不明（`target=unknown`）**: 自動起票せず、日次まとめに「対象不明のタスク候補」として
-  提示し、人間が対象（JIRA-A/B/個人）を指定した上で承認したときのみ登録する。
 
 ## 完了候補提示・クローズ
 
-完了報告らしき発言を検知した場合、対象タスクの特定を2段階で行う。
+完了報告らしき発言を検知した場合、対象タスクの特定を行う。
 
-1. 発言内にJIRAキー（例: `PROJ-123`）が明示されていればそれをそのまま`related_jira_key`とする。
-2. 明示がなければ、`target`と`project_hint`から絞り込んだ「未クローズタスク一覧」
-   （JIRA APIの検索結果＋自前ストアの`status != done`のタスク）をLLMに渡し、該当しそうな
-   ものをconfidence付きで推定させる。
+1. 発言内にJIRAキー（例: `PROJ-123`）が明示されていればそれをそのまま`related_jira_key`とする
+   （**Mattermost分は実装済み**。LLMに本文からのJIRAキー抽出を含めて分類させる）。
+2. 明示がない場合、「未クローズタスク一覧」をLLMに提示して対象を推定させる処理は
+   **未実装のまま**（Mattermost分も含む）。この場合は画面上の`<select>`で人間が対象タスクを
+   選ぶ（`docs/design/screen-close-requests.md`参照、当初の設計の代替として運用中）。
 
 クローズ候補（`candidates`のうち`kind=completion`かつ`human_verdict`が未設定の行）は、
 ダッシュボードの「クローズ要求一覧」画面に随時蓄積して表示する
@@ -237,9 +265,9 @@ statusの粒度は[タスクの進捗管理粒度](../adr/complete/status-granul
 
 ## 技術スタック（collector/extractor/syncer/registrar/digest側）
 
-**Mattermost collectorはGoで実装済み**（`internal/mattermost/`、ダッシュボードと同じ
-taskmanagerリポジトリ・同じバイナリ内の常駐goroutine。標準ライブラリ`net/http`のみで
-Mattermost REST APIを呼び出し、外部SDK依存は無い）。当初はPython想定だったが、
+**Mattermost collector兼extractorはGoで実装済み**（`internal/mattermost/`、ダッシュボードと
+同じtaskmanagerリポジトリ・同じバイナリ内の常駐goroutine。標準ライブラリ`net/http`のみで
+Mattermost REST API・ローカルLLMのOpenAI互換APIを呼び出し、外部SDK依存は無い）。当初はPython想定だったが、
 Anthropic公式Go SDK（`github.com/anthropics/anthropic-sdk-go`）の存在を確認したことで、
 将来extractorをAI(Claude API)で実装する場合もGoで完結でき、Pythonを新規に持ち込む
 技術的必然性が無いと判断した（比較検討の経緯は
@@ -257,18 +285,21 @@ SDKでClaude API呼び出し、Dockerコンテナ＋cronで定期実行）を置
 
 ## 想定される次の一手
 
-1. **Mattermost collector（収集のみ）は実装済み**（`internal/mattermost/`、2026-09-13。
-   `docs/design/data-model.md`「Mattermost collector（収集のみ）」参照）。認証情報
-   （Bot Token・サーバーURL・`MATTERMOST_CHANNEL_ROUTES`）はユーザーが自身の環境で設定する。
+1. **Mattermost collector+extractor（収集+ローカルLLMでの分類+確定target分の自動登録）は
+   実装済み**（`internal/mattermost/`、2026-09-13。`docs/design/data-model.md`
+   「Mattermost extractor」節参照）。認証情報（Bot Token・サーバーURL・
+   `MATTERMOST_CHANNEL_ROUTES`・ローカルLLMの接続先）はユーザーが自身の環境で設定する。
 2. 残る認証情報・権限の準備（ユーザー側）: JIRA APIトークン、Zoom Server-to-Server OAuth
    アプリ（会議情報・会議要約の読み取りスコープ）、メールのIMAP認証情報。
 3. `user_map`（主要メンバーの初期データ）を整備する（`project_routing`のうちMattermost分は
-   `MATTERMOST_CHANNEL_ROUTES`で代替済み。メール/Zoom分は別途整備が必要）。
-4. extractor・registrar（JIRA登録/個人タスク登録）・digest（新規登録・対象不明タスクの
-   日次まとめ投稿）、メール/Zoom collectorを実装する（管理画面（ダッシュボード）は
-   スキーマ・クローズ要求一覧画面含めパイロット実装済み。`docs/design/design.md`参照）。
+   `MATTERMOST_CHANNEL_ROUTES`で代替済み。メール/Zoom分は別途整備が必要。Mattermost extractorは
+   `assignee_raw`の`jira_account_id`解決を現状行っていない）。
+4. syncer・registrar（JIRA実APIへの自動起票）・digest（新規登録・対象不明タスクの
+   日次まとめ投稿）、メール/Zoom collector/extractorを実装する（管理画面（ダッシュボード）は
+   スキーマ・クローズ要求一覧・タスク候補一覧画面含めパイロット実装済み。
+   `docs/design/design.md`参照）。
 5. 運用開始後、precision/recall（登録・クローズ候補それぞれ）を継続的にモニタリングし、
-   プロンプト・`project_routing`・confidence閾値を調整する。
+   プロンプト・`project_routing`・confidence閾値（`MinCandidateConfidence`）を調整する。
 
 ## 関連ドキュメント
 
@@ -277,5 +308,6 @@ SDKでClaude API呼び出し、Dockerコンテナ＋cronで定期実行）を置
 - `docs/design/data-model.md` — DBスキーマ・ER図（本書のデータモデルと同一の実装済みスキーマ）。
 - `docs/design/design.md` — 「スキーマとダッシュボードUI」部分のパイロット実装（Go+sqlc+htmx）
   の全体方針。
-- `docs/design/screen-board.md` / `docs/design/screen-close-requests.md` — ダッシュボード
-  各画面（カンバンボード／クローズ要求一覧）の詳細仕様。
+- `docs/design/screen-board.md` / `docs/design/screen-close-requests.md` /
+  `docs/design/screen-task-candidates.md` — ダッシュボード各画面
+  （カンバンボード／クローズ要求一覧／タスク候補一覧）の詳細仕様。

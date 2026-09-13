@@ -1,6 +1,8 @@
 // タスク管理自動化パイロットの管理画面(Go + sqlc + htmx)。
 //
-// 外部通信は一切行わない。JIRA連携タスクのクローズ操作は「本来ここでJIRA APIの
+// 外部通信は原則行わない。唯一の例外はMattermost extractor(internal/mattermost)で、
+// 実際にMattermost APIへポーリング接続し、ローカルLLM(このホスト上のllama-swap、
+// 外部ではない)で分類する。JIRA連携タスクのクローズ操作は「本来ここでJIRA APIの
 // ステータス遷移を呼ぶ」ことが分かるようstubJiraTransition()でログ出力するのみで、
 // 実際のHTTPリクエストは送らない(本番実装時にJIRA REST API呼び出しへ差し替える想定)。
 //
@@ -60,16 +62,16 @@ func main() {
 	}
 	taskstore.StartRolloverLoop(ctx, db)
 
-	// Mattermost collector(収集のみ、抽出・JIRA自動起票は対象外)。認証情報が未設定の環境
-	// (既存のseedデータのみでの動作確認等)には一切影響しない
-	// (docs/adr/proposals/mattermost-collector-scope.md参照)。
+	// Mattermost extractor(収集+ローカルLLMによる取得時分類・自動タスク登録)。認証情報が
+	// 未設定の環境(既存のseedデータのみでの動作確認等)には一切影響しない
+	// (docs/adr/proposals/mattermost-extractor-registration-flow.md参照)。
 	if cfg, configured, err := mattermost.LoadConfigFromEnv(); err != nil {
 		log.Printf("mattermost config invalid, skipping collector: %v", err)
 	} else if configured {
 		mattermost.StartCollectorLoop(ctx, db, cfg)
-		log.Println("Mattermost collectorを起動しました")
+		log.Println("Mattermost extractorを起動しました")
 	} else {
-		log.Println("MATTERMOST_BOT_TOKEN未設定のため、Mattermost collectorは起動しません")
+		log.Println("MATTERMOST_BOT_TOKEN未設定のため、Mattermost extractorは起動しません")
 	}
 
 	staticFS, err := fs.Sub(embeddedStatic, "static")

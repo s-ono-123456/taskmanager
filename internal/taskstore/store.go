@@ -79,6 +79,17 @@ func InitSchema(ctx context.Context, db *sql.DB) error {
 			return fmt.Errorf("add priority column: %w", err)
 		}
 	}
+
+	// 既存DB(messages.permalink_url列がまだ無いもの)へのマイグレーション。
+	hasPermalinkURL, err := columnExists(ctx, db, "messages", "permalink_url")
+	if err != nil {
+		return fmt.Errorf("check permalink_url column: %w", err)
+	}
+	if !hasPermalinkURL {
+		if _, err := db.ExecContext(ctx, "ALTER TABLE messages ADD COLUMN permalink_url TEXT"); err != nil {
+			return fmt.Errorf("add permalink_url column: %w", err)
+		}
+	}
 	return nil
 }
 

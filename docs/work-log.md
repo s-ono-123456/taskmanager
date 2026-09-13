@@ -5,6 +5,77 @@
 
 ---
 
+## 2026-09-13 / Mattermost extractor（ローカルLLMによる取得時タスク化）を実装
+
+### やったこと
+
+- 直前に実装したMattermost collector（収集のみ）を実際に稼働させたところ、ユーザーから
+  「メッセージを全部保存するだけでは意味がない。AIを叩いて取得時にタスク化すべき」との
+  指摘があった。grillingスキルで前提を深掘りし、ADR4本
+  （`docs/adr/complete/mattermost-extractor-llm-choice.md`・`mattermost-extractor-registration-flow.md`・
+  `mattermost-extractor-batching.md`・`mattermost-message-retention.md`）として設計を確定した。
+- **AI選定**: Claude APIではなく、このホストに既に稼働していたローカルLLM基盤
+  （`/work/docker/llama-swap/`、OpenAI互換API）を使うことになった。調査の結果、llama-swapは
+  `response_format: json_object`での構造化出力に対応していること、Mattermost APIのスレッド
+  取得エンドポイント（`GET /api/v4/posts/{postID}/thread`）が既存の`postList`/`Post`型を
+  そのまま流用できることを事前に実機確認してから実装した。
+- **登録フロー**: `kind=task`かつ`target`確定なら自動的に`tasks`へ登録
+  （`candidates.human_verdict='auto_registered'`）。`target`不明な`kind=task`候補向けに、
+  既存の「クローズ要求一覧」と対称的な「タスク候補一覧」画面を新設した（クエリ・ビュー
+  モデル・ハンドラ・テンプレート・JSをすべて1:1でミラーリング）。
+- **バッチ化**: 新着メッセージをスレッド単位でグループ化し、同一スレッド内の複数新着は
+  まとめて1回のLLM呼び出しで分類する設計にした（ユーザーから「同じスレッドに新規投稿が
+  複数あればまとめてほしい」との要望を受けて、当初提案した「1メッセージ1呼び出し」から
+  修正）。
+- **保存方針の転換**: タスク化・候補化されなかった投稿は保持しない方針に変更（Mattermost
+  collector実装時に決めた「messagesテーブルのMAX(received_at)をカーソルにする」設計が
+  成立しなくなるため、チャンネルごとの処理位置を保持する新テーブル
+  `mattermost_channel_state`に切り替えた）。候補化された投稿には新規`messages.permalink_url`
+  列でMattermostパーマリンクも保存し、既存の「元発言」表示（`source_message_id`経由のJOIN）
+  をそのまま流用してURL・本文を確認できるようにした（新しい`description`欄の細工は不要）。
+- 実装中、**初回起動時の処理がHTTPサーバーの起動をブロックする**という設計バグを実機テストで
+  発見した。24時間分の初回キャッチアップ＋実際のスレッド数×ローカルLLMの逐次呼び出しは
+  数分かかりうるため、`StartCollectorLoop`の初回実行を同期実行からgoroutine内の非同期実行に
+  修正した（`taskstore.StartRolloverLoop`は軽量なDB更新のみなので同期のままでよいが、
+  extractorは同じパターンを踏襲すべきではなかった）。
+
+### 検証したこと
+
+- `sqlc generate`→`go build`→`go vet`が通ることを確認。
+- ローカルLLMのJSON構造化出力対応を実機（`curl .../v1/chat/completions`）で事前確認してから
+  プロンプト設計を行った。
+- 実際にアプリを起動し、実際のMattermostチャンネル・実際のローカルLLMに接続して動作することを
+  確認した（実データの取得・スレッド取得・LLM分類呼び出しが正しく実行されることをログで確認。
+  ただし実チャンネルの24時間分バックログの分類完了は、逐次LLM呼び出しのため数分〜それ以上
+  かかることが判明し、完了まで待ちきるのは今回のセッションでは行わなかった）。
+- 修正後は、上記の非同期化によりHTTPサーバーがブロックされず即座に起動することを確認した。
+- 本番のdocker composeコンテナも再ビルド・再起動し、実際にホスト側のローカルLLMへ到達
+  できること（`extra_hosts: host.docker.internal:host-gateway`経由）を確認した。
+
+### 学んだこと・注意点
+
+- **ユーザーの環境変数（ホスト側の`~/.bashrc`）の中身を、値を伏せずに`grep -n`で表示して
+  しまい、Bot Tokenを会話ログに露出させる事故を起こした。** ユーザーは事前に「トークンは
+  共有しない」と明言していたにもかかわらず、動作確認のための`grep`コマンドで値まで出力
+  してしまった。ユーザーはトークンをローテーションする対応が必要になった。再発防止として
+  `~/.claude/CLAUDE.md`（ユーザー全体のルール、プロジェクト横断で有効）に
+  「シークレットを含みうるファイル/コマンドは値を伏せた方法でのみ確認する」というルールを
+  追加した（プロジェクト単位の自動メモリではなく、ユーザー全体に効く場所に置く方が適切と
+  ユーザーからも指摘があった）。
+- 既存の「常駐goroutineの初回実行は同期でもよい」というパターン（週次ロールオーバー）を
+  そのまま新機能に踏襲すると、処理内容の性質（軽量なDB更新 vs 外部LLM呼び出しを含む
+  逐次処理）によっては起動をブロックする重大な問題になりうる。パターンを流用する際は
+  「そのパターンが妥当だった理由（今回なら“軽量だから同期でも問題ない”）」が新しい状況でも
+  成り立つかを都度確認する必要がある。今回は実機起動テストで気づけたが、レビューの時点で
+  気づければより良かった。
+- Docker Composeの`network_mode: host`で動くサービス（今回のllama-swap）へ、通常のbridge
+  ネットワークのコンテナから到達するには`extra_hosts: ["host.docker.internal:host-gateway"]`
+  が必要（Linux）。ブリッジゲートウェイIP（`docker inspect`で確認できる`Gateway`）へ直接
+  到達できることも確認したが、ネットワーク再作成で変わりうるため、標準的な
+  `host.docker.internal`方式を採用した。
+
+---
+
 ## 2026-09-13 / Cycles・優先度・Mattermost collector実装の設計書反映漏れを一斉点検
 
 ### やったこと

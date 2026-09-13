@@ -33,6 +33,8 @@ func (s *Server) Routes() *http.ServeMux {
 	mux.HandleFunc("POST /tasks/{id}/track", s.handleToggleTrack)
 	mux.HandleFunc("POST /candidates/{id}/approve", s.handleApproveCandidate)
 	mux.HandleFunc("POST /candidates/{id}/reject", s.handleRejectCandidate)
+	mux.HandleFunc("POST /task-candidates/{id}/approve", s.handleApproveTaskCandidate)
+	mux.HandleFunc("POST /task-candidates/{id}/reject", s.handleRejectTaskCandidate)
 	return mux
 }
 
@@ -386,6 +388,80 @@ func (s *Server) handleApproveCandidate(w http.ResponseWriter, r *http.Request) 
 // handleRejectCandidate はクローズ要求一覧(論点C3)の「却下」ボタン。
 // candidates.human_verdictをfalse_positiveにするのみで、タスク側は変更しない。
 func (s *Server) handleRejectCandidate(w http.ResponseWriter, r *http.Request) {
+	filter := filterFromRequest(r)
+	id, err := parseCandidateID(r)
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.q.UpdateCandidateVerdict(r.Context(), taskstore.UpdateCandidateVerdictParams{
+		HumanVerdict: sql.NullString{String: "false_positive", Valid: true},
+		ID:           id,
+	}); err != nil {
+		log.Printf("update candidate verdict: %v", err)
+		s.respondBoard(w, r, filter, &Toast{Category: "error", Message: "更新に失敗しました"})
+		return
+	}
+
+	s.respondBoard(w, r, filter, &Toast{Category: "success", Message: "候補を却下しました"})
+}
+
+// handleApproveTaskCandidate はタスク候補一覧の「承認」ボタン。
+// クローズ要求と異なり既存タスクの特定は行わず、フォームで選ばれたtargetを使って
+// 新規タスクを作成する(related_jira_keyによる自動解決に相当する分岐は無い)。
+func (s *Server) handleApproveTaskCandidate(w http.ResponseWriter, r *http.Request) {
+	filter := filterFromRequest(r)
+	id, err := parseCandidateID(r)
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	candidate, err := s.q.GetCandidate(r.Context(), id)
+	if errors.Is(err, sql.ErrNoRows) {
+		s.respondBoard(w, r, filter, &Toast{Category: "error", Message: "候補が見つかりません"})
+		return
+	} else if err != nil {
+		log.Printf("get candidate: %v", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if candidate.HumanVerdict.Valid && candidate.HumanVerdict.String != "" {
+		s.respondBoard(w, r, filter, &Toast{Category: "error", Message: "この候補は既に処理済みです"})
+		return
+	}
+
+	target := r.FormValue("target")
+	if !isValidTarget(target) {
+		s.respondBoard(w, r, filter, &Toast{Category: "error", Message: "対象を選択してください"})
+		return
+	}
+
+	task, err := createTaskFromCandidate(r.Context(), s.q, candidate, target)
+	if err != nil {
+		log.Printf("create task from candidate: %v", err)
+		s.respondBoard(w, r, filter, &Toast{Category: "error", Message: "タスクの作成に失敗しました"})
+		return
+	}
+	if err := s.q.UpdateCandidateVerdict(r.Context(), taskstore.UpdateCandidateVerdictParams{
+		HumanVerdict: sql.NullString{String: "correct", Valid: true},
+		ID:           id,
+	}); err != nil {
+		log.Printf("update candidate verdict: %v", err)
+		s.respondBoard(w, r, filter, &Toast{Category: "error", Message: "候補の更新に失敗しました"})
+		return
+	}
+
+	s.respondBoard(w, r, filter, &Toast{
+		Category: "success",
+		Message:  fmt.Sprintf("タスクを追加しました: %s", task.Title),
+	})
+}
+
+// handleRejectTaskCandidate はタスク候補一覧の「却下」ボタン。
+// candidates.human_verdictをfalse_positiveにするのみで、タスクは作成しない。
+func (s *Server) handleRejectTaskCandidate(w http.ResponseWriter, r *http.Request) {
 	filter := filterFromRequest(r)
 	id, err := parseCandidateID(r)
 	if err != nil {

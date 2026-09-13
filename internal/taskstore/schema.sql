@@ -12,7 +12,17 @@ CREATE TABLE IF NOT EXISTS messages (
     text TEXT NOT NULL,
     received_at TEXT NOT NULL,
     thread_id TEXT,
-    project_hint TEXT                      -- jira_a / jira_b / personal / unknown
+    project_hint TEXT,                     -- jira_a / jira_b / personal / unknown
+    permalink_url TEXT                     -- 元投稿へのパーマリンク(nullable。Mattermost等)
+);
+
+-- Mattermost collectorがチャンネルごとにどこまで取得済みかを保持する状態テーブル。
+-- messagesテーブルへの依存を無くすため(タスク化・候補化されなかった投稿は保持しない方針、
+-- docs/adr/proposals/mattermost-message-retention.md参照)、分類結果に関わらず取得できた
+-- 投稿の最大create_atで更新する。
+CREATE TABLE IF NOT EXISTS mattermost_channel_state (
+    channel_id TEXT PRIMARY KEY,
+    last_processed_at TEXT NOT NULL        -- 最後に取得した投稿のcreate_at(RFC3339)
 );
 
 CREATE TABLE IF NOT EXISTS candidates (
