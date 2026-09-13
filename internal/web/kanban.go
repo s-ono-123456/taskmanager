@@ -24,6 +24,16 @@ var StatusLabels = map[string]string{
 // DoneLaneWindowDays: 完了レーンに表示するのは直近この日数以内に完了したものだけ。
 const DoneLaneWindowDays = 7
 
+// Lanes: D&Dのスイムレーン行。"this_week"=今週 / "backlog"=バックログ。
+// Cycleは独立テーブルを持たず、tasks.cycle_start_dateの有無のみで表現する
+// (docs/adr/proposals/cycle-data-model.md参照)。
+var Lanes = []string{"this_week", "backlog"}
+
+var LaneLabels = map[string]string{
+	"this_week": "今週",
+	"backlog":   "バックログ",
+}
+
 func isValidTarget(t string) bool {
 	for _, v := range Targets {
 		if v == t {
@@ -40,6 +50,30 @@ func isValidStatus(s string) bool {
 		}
 	}
 	return false
+}
+
+func isValidCycle(c string) bool {
+	return c == "this_week" || c == "backlog"
+}
+
+// cycleStartDateForLane はD&Dで指定されたレーン名から、保存すべきcycle_start_date
+// (週の月曜日、バックログならNULL)を計算する(closedAtForTransitionと同様、業務ルールを
+// この層に集約する)。
+func cycleStartDateForLane(lane string) sql.NullString {
+	if lane != "this_week" {
+		return sql.NullString{}
+	}
+	return sql.NullString{String: taskstore.CurrentWeekMonday(time.Now()), Valid: true}
+}
+
+// laneForCard はカードが所属するスイムレーンを返す。判定はcycle_start_dateの有無のみ
+// (NULL=backlog/値あり=this_week)。done化したタスクのcycle_start_dateはロールオーバー
+// 対象外で据え置かれるため、doneタスクも元のスイムレーンに残り続ける。
+func laneForCard(c Card) string {
+	if c.CycleStartDate == "" {
+		return "backlog"
+	}
+	return "this_week"
 }
 
 // nowISO は現在時刻をUTCのRFC3339文字列で返す(新規書き込み用)。
@@ -107,42 +141,44 @@ func nullStrIfNotEmpty(s string) sql.NullString {
 // Card はテンプレート・ハンドラで扱いやすいよう、sql.NullStringを素の文字列に変換した
 // カード1件分のビューモデル。
 type Card struct {
-	ID            int64
-	Title         string
-	Description   string
-	Target        string
-	Status        string
-	JiraKey       string
-	Tracked       bool
-	CreatedAt     string
-	ClosedAt      string
-	LastSyncedAt  string
-	DueDate       string
-	MsgSource     string
-	MsgChannel    string
-	MsgAuthor     string
-	MsgText       string
-	MsgReceivedAt string
+	ID             int64
+	Title          string
+	Description    string
+	Target         string
+	Status         string
+	JiraKey        string
+	Tracked        bool
+	CreatedAt      string
+	ClosedAt       string
+	LastSyncedAt   string
+	DueDate        string
+	CycleStartDate string // ""ならバックログ、値ありなら所属週の月曜日(YYYY-MM-DD)
+	MsgSource      string
+	MsgChannel     string
+	MsgAuthor      string
+	MsgText        string
+	MsgReceivedAt  string
 }
 
 func cardFromRow(row taskstore.ListTasksRow) Card {
 	return Card{
-		ID:            row.ID,
-		Title:         row.Title,
-		Description:   row.Description.String,
-		Target:        row.Target,
-		Status:        row.Status,
-		JiraKey:       row.JiraKey.String,
-		Tracked:       row.Tracked != 0,
-		CreatedAt:     row.CreatedAt,
-		ClosedAt:      row.ClosedAt.String,
-		LastSyncedAt:  row.LastSyncedAt.String,
-		DueDate:       row.DueDate.String,
-		MsgSource:     row.MsgSource.String,
-		MsgChannel:    row.MsgChannel.String,
-		MsgAuthor:     row.MsgAuthor.String,
-		MsgText:       row.MsgText.String,
-		MsgReceivedAt: row.MsgReceivedAt.String,
+		ID:             row.ID,
+		Title:          row.Title,
+		Description:    row.Description.String,
+		Target:         row.Target,
+		Status:         row.Status,
+		JiraKey:        row.JiraKey.String,
+		Tracked:        row.Tracked != 0,
+		CreatedAt:      row.CreatedAt,
+		ClosedAt:       row.ClosedAt.String,
+		LastSyncedAt:   row.LastSyncedAt.String,
+		DueDate:        row.DueDate.String,
+		CycleStartDate: row.CycleStartDate.String,
+		MsgSource:      row.MsgSource.String,
+		MsgChannel:     row.MsgChannel.String,
+		MsgAuthor:      row.MsgAuthor.String,
+		MsgText:        row.MsgText.String,
+		MsgReceivedAt:  row.MsgReceivedAt.String,
 	}
 }
 
@@ -250,7 +286,9 @@ type Toast struct {
 
 // BoardData はボード全体(フルページ・フラグメント両方)の描画に必要な情報。
 type BoardData struct {
-	Columns        map[string][]Card
+	Columns        map[string]map[string][]Card // lane -> status -> cards
+	Lanes          []string
+	LaneLabels     map[string]string
 	Statuses       []string
 	StatusLabels   map[string]string
 	Targets        []string
@@ -282,9 +320,12 @@ func LoadBoardData(ctx context.Context, q *taskstore.Queries, filter BoardFilter
 		return BoardData{}, fmt.Errorf("list tasks: %w", err)
 	}
 
-	columns := make(map[string][]Card, len(Statuses))
-	for _, s := range Statuses {
-		columns[s] = []Card{}
+	columns := make(map[string]map[string][]Card, len(Lanes))
+	for _, lane := range Lanes {
+		columns[lane] = make(map[string][]Card, len(Statuses))
+		for _, s := range Statuses {
+			columns[lane][s] = []Card{}
+		}
 	}
 
 	now := time.Now().UTC()
@@ -294,7 +335,8 @@ func LoadBoardData(ctx context.Context, q *taskstore.Queries, filter BoardFilter
 			// 完了レーンが際限なく膨らまないよう、直近7日以内に完了したものだけ表示する。
 			continue
 		}
-		columns[card.Status] = append(columns[card.Status], card)
+		lane := laneForCard(card)
+		columns[lane][card.Status] = append(columns[lane][card.Status], card)
 	}
 
 	closeRequests, err := LoadCloseRequests(ctx, q)
@@ -304,6 +346,8 @@ func LoadBoardData(ctx context.Context, q *taskstore.Queries, filter BoardFilter
 
 	return BoardData{
 		Columns:        columns,
+		Lanes:          Lanes,
+		LaneLabels:     LaneLabels,
 		Statuses:       Statuses,
 		StatusLabels:   StatusLabels,
 		Targets:        Targets,

@@ -37,7 +37,8 @@
 │   ├── sqlc.yaml
 │   ├── (db.go / models.go / query.sql.go: sqlc生成コード。コミットせず、ビルド時に生成)
 │   ├── store.go                 # DB接続・起動時マイグレーション
-│   └── seed.go                  # サンプルデータ投入(再実行可能・全件作り直し)
+│   ├── seed.go                  # サンプルデータ投入(再実行可能・全件作り直し)
+│   └── rollover.go              # 週次サイクルの自動繰り越し(常駐goroutine)
 ├── internal/web/                # HTTPハンドラ・業務ロジック
 │   ├── handlers.go               # 7ルートのハンドラ
 │   ├── kanban.go                 # 業務ロジック集約(closed_at計算・7日フィルタ・ラベル等)
@@ -81,7 +82,7 @@
 | `GET /` | ボード表示。`target`・`show_untracked`をクエリパラメータで受け取る |
 | `POST /tasks/new` | 新規タスク作成（due_date任意）。target が jira_a/jira_b の場合はJIRA起票スタブのログのみ出力（実通信なし） |
 | `POST /tasks/{id}/edit` | 編集モーダルからの保存。title/target/statusを検証し更新（due_dateは未入力ならNULLとして保存）。`status`が`done`へ/から変化する際は`closed_at`をその場で設定/クリアする |
-| `POST /tasks/{id}/move` | ドラッグ&ドロップからの状態変更。JIRA連携タスクなら`stubJiraTransition()`を呼ぶ |
+| `POST /tasks/{id}/move` | ドラッグ&ドロップからの状態変更。`status`に加え`cycle`(`this_week`/`backlog`)も受け取り両方を更新する。JIRA連携タスクなら`stubJiraTransition()`を呼ぶ |
 | `POST /tasks/{id}/track` | 「非表示」/「再表示」ボタン。後述の業務ルール参照 |
 | `POST /candidates/{id}/approve` | クローズ要求一覧の「承認」ボタン。後述の業務ルール参照 |
 | `POST /candidates/{id}/reject` | クローズ要求一覧の「却下」ボタン。`candidates.human_verdict`を`false_positive`にするのみ |
@@ -126,6 +127,20 @@ docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$(pwd):/src" -w /src
 `--user "$(id -u):$(id -g)"`を付けないと生成物がroot所有になり、ホスト側から編集できなく
 なるので必ず付けること。`build/Dockerfile`はこの2ステップをビルドステージとして
 自動実行するため、`docker compose up --build`等のDocker運用では意識不要。
+
+## 常駐処理（週次ロールオーバー）
+
+本アプリで初めて、アプリ独自の常駐goroutineを導入した（`internal/taskstore/rollover.go`の
+`StartRolloverLoop`）。Linear風の「今週/バックログ」区分（Cycles機能）における週次繰り越しを
+15分間隔のtickerで自動実行する。`main.go`の起動シーケンスは
+`InitSchema`→（AUTO_SEEDなら`Seed`）→**起動時ロールオーバーを1回同期実行**→常駐goroutine起動
+→HTTPサーバー起動、の順。現状`main.go`にはグレースフルシャットダウンの仕組みが元々無い
+（`http.ListenAndServe`のエラーは`log.Fatal`で即終了し、`defer db.Close()`は実質到達しない）
+ため、今回追加した常駐goroutineも`context.Background()`を渡すだけのシンプルな
+fire-and-forget実装としている（将来グレースフルシャットダウンを実装する際はこのgoroutineの
+終了待ちも合わせて設計する必要がある）。詳細な業務ルールは`docs/design/screen-board.md`
+「週次繰り越し」節、実行方式の比較検討の経緯は`docs/adr/complete/cycle-rollover-execution.md`
+を参照。
 
 ## 既知の制限・今後の課題
 

@@ -9,7 +9,7 @@
 |---|---|---|
 | `messages` | 収集した生メッセージ（本パイロットではseed.goの固定サンプルのみ） | `source`(mattermost/email/zoom), `channel_or_meeting`, `author`, `text`, `received_at`, `project_hint` |
 | `candidates` | メッセージから抽出したタスク/完了候補。`kind=task`の候補は表示画面からは未使用（将来のextractor実装用に器のみ）だが、`kind=completion`の候補（完了報告）は「クローズ要求一覧」画面（`docs/design/screen-close-requests.md`参照）が参照する | `kind`(task/completion), `confidence`, `target`, `due_date`, `human_verdict` |
-| `tasks` | ダッシュボードが実際に読み書きする本体 | `title`, `description`, `target`(jira_a/jira_b/personal), `status`(todo/in_progress/reviewing/done), `jira_key`, `created_at`, `closed_at`, `last_synced_at`, `tracked`(0/1), `due_date`(YYYY-MM-DD、nullable) |
+| `tasks` | ダッシュボードが実際に読み書きする本体 | `title`, `description`, `target`(jira_a/jira_b/personal), `status`(todo/in_progress/reviewing/done), `jira_key`, `created_at`, `closed_at`, `last_synced_at`, `tracked`(0/1), `due_date`(YYYY-MM-DD、nullable), `cycle_start_date`(所属週の月曜日、YYYY-MM-DD、nullable。NULL=バックログ) |
 | `user_map` | 発言者⇔JIRAアカウントの対応（本パイロットでは表示画面からは未使用） | `source`, `source_user_id`, `jira_account_id`, `display_name` |
 
 ## ER図
@@ -62,6 +62,7 @@ erDiagram
         datetime last_synced_at "nullable(JIRA連携タスクのみ、syncer更新時刻)"
         boolean tracked "default true。falseで画面非表示・同期対象外"
         date due_date "nullable。期限"
+        date cycle_start_date "nullable。NULL=バックログ、値ありなら所属週の月曜日(週次サイクル)"
     }
 
     USER_MAP {
@@ -78,12 +79,23 @@ erDiagram
   「抽出・分類」参照）。
 - `tasks.jira_key`はJIRA起票済みなら値あり、個人タスクはNULLのまま自前ストアの実体となる。
 
+## 週次サイクル（Cycles）
+
+Linear風の「今週/バックログ」区分を`tasks.cycle_start_date`のみで表現し、独立した
+Cycleテーブルは持たない（過去サイクルの履歴参照は要件外のため。比較検討の経緯は
+`docs/adr/complete/cycle-data-model.md`参照）。`internal/taskstore/rollover.go`が
+週境界（月曜0:00 JST）を跨いだ未完了タスクの`cycle_start_date`を現在の週の月曜日へ
+書き換える（常駐goroutine＋起動時キャッチアップ実行、外部通信なし。詳細は
+`docs/design/screen-board.md`「週次繰り越し」節、実行方式の検討経緯は
+`docs/adr/complete/cycle-rollover-execution.md`参照）。
+
 ## マイグレーション・実装上の注意
 
 - `internal/taskstore/store.go`の`InitSchema()`は起動のたびに呼ばれ、`schema.sql`
   （go:embed）を実行した後、旧スキーマ（`status`が`open`/`done`の2値だった時代のデータ）を
-  `todo`へ寄せるマイグレーションと、`due_date`列が無ければ`ALTER TABLE`で追加する
-  マイグレーションを実行する（Flask版の`db.py`の`init_db()`と同内容）。
+  `todo`へ寄せるマイグレーションと、`due_date`/`cycle_start_date`列が無ければ
+  `ALTER TABLE`で追加するマイグレーションを実行する（Flask版の`db.py`の`init_db()`と
+  同内容＋`cycle_start_date`追加分）。
 - `tracked`（真偽値、SQLite上は0/1の整数）は「非表示」の実体。削除ではなくこのフラグの
   反転のみで、行は物理的には常に残る（業務ルールの詳細は`docs/design/screen-board.md`参照）。
 - クエリは`internal/taskstore/query.sql`に集約されており、`sqlc generate`で

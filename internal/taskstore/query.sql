@@ -17,8 +17,8 @@ SELECT * FROM tasks WHERE id = ?;
 -- name: CreateTask :one
 INSERT INTO tasks
   (source_message_id, title, description, target, status, jira_key,
-   created_at, closed_at, last_synced_at, tracked, due_date)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+   created_at, closed_at, last_synced_at, tracked, due_date, cycle_start_date)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: UpdateTask :exec
@@ -27,6 +27,16 @@ UPDATE tasks SET title = ?, description = ?, target = ?,
 
 -- name: UpdateTaskStatus :exec
 UPDATE tasks SET status = ?, closed_at = ? WHERE id = ?;
+
+-- name: UpdateTaskStatusAndCycle :exec
+UPDATE tasks SET status = ?, closed_at = ?, cycle_start_date = ? WHERE id = ?;
+
+-- name: RolloverCycles :execrows
+UPDATE tasks
+SET cycle_start_date = sqlc.arg('new_monday')
+WHERE cycle_start_date IS NOT NULL
+  AND cycle_start_date <> sqlc.arg('new_monday')
+  AND status <> 'done';
 
 -- name: SetTaskUntrackedKeepStatus :exec
 UPDATE tasks SET tracked = 0 WHERE id = ?;

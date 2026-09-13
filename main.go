@@ -15,6 +15,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"taskmanager/internal/taskstore"
 	"taskmanager/internal/web"
@@ -48,6 +49,15 @@ func main() {
 			log.Println("サンプルデータを投入しました（外部通信なし）")
 		}
 	}
+
+	// 週次サイクルの繰り越し。サーバー起動時にも即座に1回実行することで、サーバー停止中に
+	// 週境界(月曜0:00 JST)をまたいでいた場合を補完する(docs/adr/proposals/cycle-rollover-execution.md参照)。
+	if affected, err := taskstore.RunRollover(ctx, taskstore.New(db), time.Now()); err != nil {
+		log.Printf("initial rollover failed (continuing): %v", err)
+	} else if affected > 0 {
+		log.Printf("起動時ロールオーバー: %d件のタスクを繰り越しました", affected)
+	}
+	taskstore.StartRolloverLoop(ctx, db)
 
 	staticFS, err := fs.Sub(embeddedStatic, "static")
 	if err != nil {

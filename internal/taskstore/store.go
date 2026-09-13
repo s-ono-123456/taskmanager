@@ -56,6 +56,17 @@ func InitSchema(ctx context.Context, db *sql.DB) error {
 			return fmt.Errorf("add due_date column: %w", err)
 		}
 	}
+
+	// 既存DB(cycle_start_date列がまだ無いもの)へのマイグレーション。
+	hasCycleStartDate, err := columnExists(ctx, db, "tasks", "cycle_start_date")
+	if err != nil {
+		return fmt.Errorf("check cycle_start_date column: %w", err)
+	}
+	if !hasCycleStartDate {
+		if _, err := db.ExecContext(ctx, "ALTER TABLE tasks ADD COLUMN cycle_start_date TEXT"); err != nil {
+			return fmt.Errorf("add cycle_start_date column: %w", err)
+		}
+	}
 	return nil
 }
 

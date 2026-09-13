@@ -102,6 +102,8 @@
     </div>
 
     <dl class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs bg-slate-50 dark:bg-slate-900/40 rounded-lg p-3">
+      <dt class="text-slate-500 dark:text-slate-400">週の所属</dt>
+      <dd id="edit-info-cycle" class="text-slate-700 dark:text-slate-200"></dd>
       <dt class="text-slate-500 dark:text-slate-400">JIRA連携</dt>
       <dd id="edit-info-jira" class="text-slate-700 dark:text-slate-200"></dd>
       <dt class="text-slate-500 dark:text-slate-400">表示状態</dt>
@@ -205,91 +207,101 @@
 {{end}}
 
 {{define "board"}}
-<div id="board" class="flex gap-4 items-stretch overflow-x-auto pb-4">
+<div id="board" class="flex flex-col gap-6">
   {{$today := .Today}}
-  {{range $status := .Statuses}}
-  {{$cards := index $.Columns $status}}
-  <div class="column flex flex-col flex-1 min-w-[260px] min-h-[20rem] rounded-xl bg-white dark:bg-slate-800 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 transition-colors"
-       data-status="{{$status}}">
-    <div class="flex items-center gap-2 px-3 pt-3 pb-2 border-b-2 {{accentBarClass $status}} border-opacity-70 rounded-t-xl">
-      <h2 class="font-semibold text-sm">{{statusLabel $status}}</h2>
-      <span class="text-xs font-medium rounded-full px-2 py-0.5 {{accentPillClass $status}}">
-        {{len $cards}}
-      </span>
-      {{if eq $status "done"}}
-      <span class="text-xs text-white/80">(直近{{$.DoneWindowDays}}日以内に完了)</span>
-      {{end}}
-    </div>
-    <div class="flex-1 p-3 space-y-3">
-      {{range $card := $cards}}
-      <div class="card group rounded-lg bg-white dark:bg-slate-900/60 shadow-sm
-                  hover:shadow-md hover:ring-blue-300 dark:hover:ring-blue-600 hover:-translate-y-0.5 transition-all
-                  p-2.5 text-sm cursor-pointer flex items-start gap-2
-                  {{if eq $card.Status "done"}}opacity-60{{end}}
-                  {{if not $card.Tracked}}opacity-60 border-2 border-dashed border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/60{{else}}ring-1 ring-slate-200 dark:ring-slate-700{{end}}"
-           draggable="true" data-task-id="{{$card.ID}}"
-           data-title="{{$card.Title}}"
-           data-description="{{$card.Description}}"
-           data-target="{{$card.Target}}"
-           data-status="{{$card.Status}}"
-           data-jira-key="{{$card.JiraKey}}"
-           data-tracked="{{if $card.Tracked}}1{{else}}0{{end}}"
-           data-created-at="{{$card.CreatedAt}}"
-           data-closed-at="{{$card.ClosedAt}}"
-           data-last-synced-at="{{$card.LastSyncedAt}}"
-           data-due-date="{{$card.DueDate}}"
-           data-msg-source="{{$card.MsgSource}}"
-           data-msg-channel="{{$card.MsgChannel}}"
-           data-msg-author="{{$card.MsgAuthor}}"
-           data-msg-text="{{$card.MsgText}}"
-           data-msg-received-at="{{$card.MsgReceivedAt}}">
-        <div class="min-w-0 flex-1">
-          <div class="font-medium truncate {{if eq $card.Status "done"}}line-through text-slate-400{{end}}">
-            {{$card.Title}}
-          </div>
-          <div class="flex flex-wrap items-center gap-1.5 mt-1 text-xs">
-            <span class="inline-block rounded-full px-2 py-0.5 {{targetPillClass $card.Target}}">
-              {{$card.Target}}
-            </span>
-            {{if not $card.Tracked}}
-            <span class="inline-block font-medium rounded-full px-2 py-0.5 border border-dashed border-slate-400 text-slate-500 dark:text-slate-400">
-              非表示中
-            </span>
-            {{end}}
-            {{if $card.DueDate}}
-            <span class="inline-block rounded-full px-2 py-0.5 font-medium
-                         {{if isOverdue $card.DueDate $today $card.Status}}bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-200{{else}}bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300{{end}}">
-              {{$card.DueDate}}
-            </span>
-            {{end}}
-          </div>
+  {{range $lane := .Lanes}}
+  <div class="lane-row rounded-xl bg-slate-100/60 dark:bg-slate-900/30 p-3 pb-8" data-lane="{{$lane}}">
+    <h2 class="text-sm font-semibold text-slate-500 dark:text-slate-400 mb-2 px-1">
+      {{index $.LaneLabels $lane}}
+    </h2>
+    <div class="flex gap-4 items-stretch overflow-x-auto">
+      {{range $status := $.Statuses}}
+      {{$cards := index (index $.Columns $lane) $status}}
+      <div class="column flex flex-col flex-1 min-w-[260px] min-h-[10rem] rounded-xl bg-white dark:bg-slate-800 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 transition-colors"
+           data-status="{{$status}}" data-lane="{{$lane}}">
+        <div class="flex items-center gap-2 px-3 pt-3 pb-2 border-b-2 {{accentBarClass $status}} border-opacity-70 rounded-t-xl">
+          <h3 class="font-semibold text-sm">{{statusLabel $status}}</h3>
+          <span class="text-xs font-medium rounded-full px-2 py-0.5 {{accentPillClass $status}}">
+            {{len $cards}}
+          </span>
+          {{if eq $status "done"}}
+          <span class="text-xs text-white/80">(直近{{$.DoneWindowDays}}日以内に完了)</span>
+          {{end}}
         </div>
-        <form hx-post="/tasks/{{$card.ID}}/track" hx-target="#board" hx-swap="outerHTML"
-              hx-vals="js:{...filterStateVals()}"
-              class="card-actions shrink-0">
-          <button type="submit"
-                  title="{{if $card.Tracked}}非表示にする{{else}}再表示する{{end}}"
-                  aria-label="{{if $card.Tracked}}非表示にする{{else}}再表示する{{end}}"
-                  class="rounded p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-slate-200 dark:hover:bg-slate-700 transition-colors">
-            {{if $card.Tracked}}
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                 stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4">
-              <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/>
-              <circle cx="12" cy="12" r="3"/>
-              <line x1="3" y1="3" x2="21" y2="21"/>
-            </svg>
-            {{else}}
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                 stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4">
-              <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/>
-              <circle cx="12" cy="12" r="3"/>
-            </svg>
-            {{end}}
-          </button>
-        </form>
+        <div class="flex-1 p-3 space-y-3">
+          {{range $card := $cards}}
+          <div class="card group rounded-lg bg-white dark:bg-slate-900/60 shadow-sm
+                      hover:shadow-md hover:ring-blue-300 dark:hover:ring-blue-600 hover:-translate-y-0.5 transition-all
+                      p-2.5 text-sm cursor-pointer flex items-start gap-2
+                      {{if eq $card.Status "done"}}opacity-60{{end}}
+                      {{if not $card.Tracked}}opacity-60 border-2 border-dashed border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/60{{else}}ring-1 ring-slate-200 dark:ring-slate-700{{end}}"
+               draggable="true" data-task-id="{{$card.ID}}"
+               data-title="{{$card.Title}}"
+               data-description="{{$card.Description}}"
+               data-target="{{$card.Target}}"
+               data-status="{{$card.Status}}"
+               data-cycle="{{$card.CycleStartDate}}"
+               data-jira-key="{{$card.JiraKey}}"
+               data-tracked="{{if $card.Tracked}}1{{else}}0{{end}}"
+               data-created-at="{{$card.CreatedAt}}"
+               data-closed-at="{{$card.ClosedAt}}"
+               data-last-synced-at="{{$card.LastSyncedAt}}"
+               data-due-date="{{$card.DueDate}}"
+               data-msg-source="{{$card.MsgSource}}"
+               data-msg-channel="{{$card.MsgChannel}}"
+               data-msg-author="{{$card.MsgAuthor}}"
+               data-msg-text="{{$card.MsgText}}"
+               data-msg-received-at="{{$card.MsgReceivedAt}}">
+            <div class="min-w-0 flex-1">
+              <div class="font-medium truncate {{if eq $card.Status "done"}}line-through text-slate-400{{end}}">
+                {{$card.Title}}
+              </div>
+              <div class="flex flex-wrap items-center gap-1.5 mt-1 text-xs">
+                <span class="inline-block rounded-full px-2 py-0.5 {{targetPillClass $card.Target}}">
+                  {{$card.Target}}
+                </span>
+                {{if not $card.Tracked}}
+                <span class="inline-block font-medium rounded-full px-2 py-0.5 border border-dashed border-slate-400 text-slate-500 dark:text-slate-400">
+                  非表示中
+                </span>
+                {{end}}
+                {{if $card.DueDate}}
+                <span class="inline-block rounded-full px-2 py-0.5 font-medium
+                             {{if isOverdue $card.DueDate $today $card.Status}}bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-200{{else}}bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300{{end}}">
+                  {{$card.DueDate}}
+                </span>
+                {{end}}
+              </div>
+            </div>
+            <form hx-post="/tasks/{{$card.ID}}/track" hx-target="#board" hx-swap="outerHTML"
+                  hx-vals="js:{...filterStateVals()}"
+                  class="card-actions shrink-0">
+              <button type="submit"
+                      title="{{if $card.Tracked}}非表示にする{{else}}再表示する{{end}}"
+                      aria-label="{{if $card.Tracked}}非表示にする{{else}}再表示する{{end}}"
+                      class="rounded p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-slate-200 dark:hover:bg-slate-700 transition-colors">
+                {{if $card.Tracked}}
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4">
+                  <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                  <line x1="3" y1="3" x2="21" y2="21"/>
+                </svg>
+                {{else}}
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4">
+                  <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+                {{end}}
+              </button>
+            </form>
+          </div>
+          {{else}}
+          <p class="text-xs text-slate-400 text-center py-6">タスクなし</p>
+          {{end}}
+        </div>
       </div>
-      {{else}}
-      <p class="text-xs text-slate-400 text-center py-6">タスクなし</p>
       {{end}}
     </div>
   </div>

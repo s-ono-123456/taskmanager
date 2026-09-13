@@ -109,6 +109,8 @@ func (s *Server) handleNewTask(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:   nowISO(),
 		Tracked:     1,
 		DueDate:     nullStrIfNotEmpty(r.FormValue("due_date")),
+		// 新規作成タスクは常にバックログ固定(仕様)。CycleStartDateは未指定のまま
+		// ゼロ値sql.NullString{}(NULL)とする。
 	})
 	if err != nil {
 		log.Printf("create task: %v", err)
@@ -198,6 +200,11 @@ func (s *Server) handleMoveTask(w http.ResponseWriter, r *http.Request) {
 		s.respondBoard(w, r, filter, &Toast{Category: "error", Message: "状態の値が不正です"})
 		return
 	}
+	cycle := r.FormValue("cycle")
+	if !isValidCycle(cycle) {
+		s.respondBoard(w, r, filter, &Toast{Category: "error", Message: "週の値が不正です"})
+		return
+	}
 
 	task, err := s.q.GetTask(r.Context(), id)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -214,19 +221,20 @@ func (s *Server) handleMoveTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	closedAt := closedAtForTransition(task.Status, status, task.ClosedAt)
-	if err := s.q.UpdateTaskStatus(r.Context(), taskstore.UpdateTaskStatusParams{
-		Status:   status,
-		ClosedAt: closedAt,
-		ID:       id,
+	if err := s.q.UpdateTaskStatusAndCycle(r.Context(), taskstore.UpdateTaskStatusAndCycleParams{
+		Status:         status,
+		ClosedAt:       closedAt,
+		CycleStartDate: cycleStartDateForLane(cycle),
+		ID:             id,
 	}); err != nil {
-		log.Printf("update task status: %v", err)
+		log.Printf("update task status and cycle: %v", err)
 		s.respondBoard(w, r, filter, &Toast{Category: "error", Message: "更新に失敗しました"})
 		return
 	}
 
 	s.respondBoard(w, r, filter, &Toast{
 		Category: "success",
-		Message:  fmt.Sprintf("「%s」を%sに移動しました", task.Title, StatusLabels[status]),
+		Message:  fmt.Sprintf("「%s」を%s・%sに移動しました", task.Title, LaneLabels[cycle], StatusLabels[status]),
 	})
 }
 

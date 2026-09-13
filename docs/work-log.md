@@ -5,6 +5,62 @@
 
 ---
 
+## 2026-09-13 / Linear風Cycles機能（週次の今週/バックログ区分）を追加
+
+### やったこと
+
+- ユーザーからLinearの「Cycles」機能を参考にしたいとの相談を受け、まずLinear自体の機能調査
+  （Web検索）を行った後、grillingスキルで「taskmanagerにどう取り込むか」を深掘りした
+  （目的・対象範囲・UI構造・繰り越し方式など計14問のQ&A）。確定要件はADR3本
+  （`docs/adr/proposals/cycle-data-model.md`・`cycle-rollover-execution.md`・
+  `board-dnd-two-axis.md`）として記録。
+- プランモードでExplore/Planサブエージェントを使い既存コード（schema.sql/query.sql/
+  kanban.go/handlers.go/board.html.tmpl/board.js/main.go）を調査した上で実装計画を確定し、
+  承認を得てから実装した。
+- 実装内容:
+  - `tasks.cycle_start_date`(nullable、所属週の月曜日)列を追加。Cycleは独立テーブルに
+    せず、この1列のみで表現（履歴参照は要件外のため）。
+  - `internal/taskstore/rollover.go`を新規作成。`CurrentWeekMonday()`でJST月曜始まりの
+    週を計算し、`RunRollover()`が未完了タスクの`cycle_start_date`を現在週へ一括更新。
+    `StartRolloverLoop()`が15分間隔のtickerで常駐goroutineとして実行（本アプリ初の
+    常駐処理）。`main.go`で起動時にも1回同期実行し、サーバー停止中の週跨ぎを補完。
+  - `internal/web/kanban.go`に`Lanes`(`this_week`/`backlog`)・`laneForCard()`・
+    `cycleStartDateForLane()`を追加し、`BoardData.Columns`を`map[string]map[string][]Card`
+    （lane→status→cards）の2軸構造に変更。
+  - `handleMoveTask`が`status`に加え`cycle`も受け取り、新規クエリ`UpdateTaskStatusAndCycle`
+    で両方を同時更新。新規作成(`handleNewTask`)・編集(`handleEditTask`)は変更不要
+    （新規作成は常にバックログ固定、編集は`cycle_start_date`に触れない設計のため）。
+  - `board.html.tmpl`をスイムレーン行×ステータス列の2重ループに変更。
+  - `board.js`のD&D判定を、既存の「x座標のみで列を判定」する1軸ロジックから、
+    「まずY座標でスイムレーン行、次にX座標でステータス列」を判定する2軸ロジックへ拡張
+    （行の当たり判定には`LANE_HIT_MARGIN_PX`で余裕を持たせた）。
+  - `docs/design/data-model.md`・`screen-board.md`・`design.md`・`CLAUDE.md`を更新。
+
+### 検証したこと
+
+- `sqlc generate`→`go build`が通ることを確認。
+- アプリを実際に起動し、`curl`でボードHTMLを取得して2スイムレーン×4ステータス列の
+  グリッド・各カードの`data-cycle`属性が期待通りであることを確認。
+- `/tasks/{id}/move`にstatus+cycleを送信し、DB上で両方が同時に正しく更新されることを確認。
+- ロールオーバー処理は、一時的なGoテスト（`rollover_verify_test.go`、検証後に削除）で
+  「過去週×未完了タスクは今週へ繰り越される」「過去週×完了済みタスクは据え置かれる」の
+  両方を確認した。
+
+### 学んだこと・注意点
+
+- Dockerでsqlite3 CLIを使ってホスト上のSQLiteファイルを直接UPDATEしようとすると、
+  コンテナのユーザー/パーミッションの組み合わせによっては`attempt to write a readonly
+  database`で失敗するケースがあった（`--user`指定あり/なし、ファイルのchmodを変えても
+  解消せず）。原因を深追いする代わりに、アプリと同じ`modernc.org/sqlite`ドライバを使う
+  一時的なGoテストでDBを直接操作する方式に切り替えたところ問題なく検証できた。今後
+  同様にDBの中身を直接検証したい場合は、最初からこの方式（Goの一時テスト）を使う方が早い。
+- 既存の業務ルール文書（特に`CLAUDE.md`の「誤解しやすい業務ルール」）に、今回の変更で
+  事実と異なることになる記述（D&Dがx座標のみで判定、という記述）があり、見落とすと
+  ドキュメントと実装が矛盾する状態になる。機能追加時は関連する既存の「業務ルール」系
+  記述を`grep`等で洗い出し、変更後の挙動に揃えて書き換える必要がある。
+
+---
+
 ## 2026-09-13 / task-management-automation.mdの重複記述・リンク切れを解消
 
 ### やったこと

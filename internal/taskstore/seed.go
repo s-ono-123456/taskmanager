@@ -31,17 +31,18 @@ type seedCandidate struct {
 }
 
 type seedTask struct {
-	msgIdx       int // -1ならNULL
-	title        string
-	description  string
-	target       string
-	status       string
-	jiraKey      string
-	createdAt    string
-	closedAt     string
-	lastSyncedAt string
-	tracked      int64
-	dueDate      string
+	msgIdx         int // -1ならNULL
+	title          string
+	description    string
+	target         string
+	status         string
+	jiraKey        string
+	createdAt      string
+	closedAt       string
+	lastSyncedAt   string
+	tracked        int64
+	dueDate        string
+	cycleStartDate string // ""ならバックログ、値ありなら所属週の月曜日(YYYY-MM-DD)
 }
 
 type seedUserMap struct {
@@ -91,17 +92,17 @@ var seedCandidates = []seedCandidate{
 
 var seedTasks = []seedTask{
 	{0, "API仕様書をまとめる", "元発言: post-1001（#project-a）", "jira_a", "todo",
-		"PROJA-101", "2026-09-08T10:05:00", "", "2026-09-12T09:00:00", 1, "2026-09-10"},
+		"PROJA-101", "2026-09-08T10:05:00", "", "2026-09-12T09:00:00", 1, "2026-09-10", "2026-09-07"},
 	{1, "バグ修正: ログイン画面のエラー", "元発言: post-1002（#project-b）", "jira_b", "done",
-		"PROJB-42", "2026-09-05T11:00:00", "2026-09-10T15:35:00", "2026-09-12T09:00:00", 1, ""},
+		"PROJB-42", "2026-09-05T11:00:00", "2026-09-10T15:35:00", "2026-09-12T09:00:00", 1, "", ""},
 	{2, "資料レビュー", "依頼元: yamada@example.com", "personal", "in_progress",
-		"", "2026-09-09T09:20:00", "", "", 1, "2026-09-20"},
+		"", "2026-09-09T09:20:00", "", "", 1, "2026-09-20", "2026-09-07"},
 	{-1, "旧: サーバー証明書更新", "過去に完了・追跡除外済みの例", "jira_a", "done",
-		"PROJA-88", "2026-08-01T09:00:00", "2026-08-20T17:00:00", "2026-08-21T09:00:00", 0, ""},
+		"PROJA-88", "2026-08-01T09:00:00", "2026-08-20T17:00:00", "2026-08-21T09:00:00", 0, "", ""},
 	{-1, "個人: 経費精算", "個人タスクの例", "personal", "todo",
-		"", "2026-09-11T08:00:00", "", "", 1, ""},
+		"", "2026-09-11T08:00:00", "", "", 1, "", ""},
 	{-1, "個人: 昔のメモ整理", "完了済み・追跡除外の個人タスクの例", "personal", "done",
-		"", "2026-07-01T09:00:00", "2026-07-05T09:00:00", "", 0, ""},
+		"", "2026-07-01T09:00:00", "2026-07-05T09:00:00", "", 0, "", ""},
 }
 
 var seedUserMaps = []seedUserMap{
@@ -201,6 +202,7 @@ func Seed(ctx context.Context, db *sql.DB) error {
 			LastSyncedAt:    nullStr(t.lastSyncedAt),
 			Tracked:         t.tracked,
 			DueDate:         nullStr(t.dueDate),
+			CycleStartDate:  nullStr(t.cycleStartDate),
 		}); err != nil {
 			return fmt.Errorf("insert task %d: %w", i, err)
 		}

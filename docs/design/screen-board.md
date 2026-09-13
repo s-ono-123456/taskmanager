@@ -4,14 +4,31 @@
 > 参照。本書は`GET /`（`internal/web/templates/board.html.tmpl`）で表示するメイン画面
 > （カンバンボード、タスク編集/新規作成モーダル）の仕様を扱う。
 
-## レーン構成
+## レーン構成（ステータス列）
 - 4レーン固定: `未着手`(todo) / `進行中`(in_progress) / `確認中`(reviewing) / `完了`(done)。
   レーン追加は`internal/web/kanban.go`の`Statuses`/`StatusLabels`とテンプレート内の
   `accentBarClass`/`accentPillClass`に値を足すだけで済む。
 - **完了レーンは直近7日以内に完了したタスクのみ表示**する
   （`DoneLaneWindowDays = 7`、`isRecentlyClosed()`で判定）。7日を超えたものは
   データとしては残るが、「非表示分も表示」をONにしても一切表示されない（無制限に膨らむのを防ぐ
-  ための表示上のフィルタであり、削除ではない）。
+  ための表示上のフィルタであり、削除ではない）。この7日フィルタはスイムレーン（後述）に関わらず
+  共通適用される。
+
+## スイムレーン構成（今週/バックログ）
+
+- 上記4ステータス列の上に、「今週」「バックログ」の2スイムレーン（行）を重ねた2軸グリッド。
+  `internal/web/kanban.go`の`Lanes`(`this_week`/`backlog`)/`LaneLabels`で定義する。
+- 所属判定は`tasks.cycle_start_date`の有無のみ（`laneForCard()`）。NULLなら「バックログ」、
+  値（所属週の月曜日）があれば「今週」。Cycleは独立テーブルを持たず、この1列のみで表現する
+  （比較検討の経緯は`docs/adr/complete/cycle-data-model.md`参照）。
+- 対象はtarget（personal/jira_a/jira_b）種別に関わらず共通。JIRA実スプリントとの連携・同期は
+  一切行わない。
+- 切替手段は**ドラッグ&ドロップのみ**（後述）で、追加の切替ボタンは設けない。
+- **新規作成タスクは常にバックログがデフォルト**（`cycle_start_date`は未指定のままNULL）。
+  新規作成モーダルに週選択UIは無い。
+- **完了(`status=done`)になったタスクは元のスイムレーンに残る**（`cycle_start_date`は
+  ロールオーバー対象外で据え置かれるため）。直近7日以内の完了のみ表示される既存ルールに従う。
+- 編集モーダルには「週の所属」を読み取り専用で表示するのみ（切替はD&Dのみのため編集不可）。
 
 ## フィルタ（ツールバー）
 - 対象(`target`)プルダウンと「非表示分も表示」(`show_untracked`)チェックボックスは、
@@ -48,13 +65,34 @@
   バリデーションエラー時もモーダル相当の入力内容は失われていたが、Go+htmx版では
   エラー時に入力内容を保持したままモーダルを開いておける（ユーザー承認済みのUX改善）。
 
-## ドラッグ&ドロップ
-- 個々の列（`.column`）ではなく`document`全体に`dragover`/`drop`リスナーを張り、
-  **ポインタのx座標がどの列の左右範囲(`getBoundingClientRect`)に入っているかだけ**で
-  ドロップ先レーンを決定する（y座標・列の高さは一切考慮しない。Flask版と同じロジック）。
-- ドロップ確定時は`htmx.ajax('POST', '/tasks/<id>/move', {target:'#board', swap:'outerHTML', values:{...}})`
-  を呼ぶ（Flask版の`fetch`+`location.reload()`から置き換え。フルリロードなしで`#board`のみ
-  更新される）。
+## ドラッグ&ドロップ（2軸判定）
+
+スイムレーン導入に伴い、**x座標（ステータス列）に加えy座標（スイムレーン行）も判定する
+2軸ロジック**に変更した（Flask版由来の「x座標のみ」という1軸ロジックからの変更。比較検討の
+経緯は`docs/adr/complete/board-dnd-two-axis.md`参照）。
+
+- 個々のセル（`.column`）ではなく`document`全体に`dragover`/`drop`リスナーを張る点は変更
+  していない。判定は「まずY座標で`.lane-row`（今週/バックログの行）を特定し、次にその行の
+  内側に限定してX座標で`.column`（ステータス列）の左右範囲(`getBoundingClientRect`)に
+  入っているかだけ」で決める2段階方式（`dropTargetAt(x, y)`、`static/board.js`）。
+- 列の高さ（枠）に関係なく、行内でx範囲内ならドロップを受け付ける寛容な挙動はそのまま維持する。
+- スイムレーン行の当たり判定には、誤操作防止のための余裕を持たせている。`.lane-row`自体の
+  CSSパディング（`pb-8`）に加え、JS側で上下に追加マージン（`LANE_HIT_MARGIN_PX = 10px`）を
+  設けて実クリック領域を見た目より広げる。このマージンは行間のgap（`gap-6`=24px）より小さい
+  値にしてあり、2行の拡張ヒット領域が重ならないようにしている。境界ぴったりにドロップされた
+  場合は、DOM順で先に登場する「今週」行が優先される。
+- ドロップ確定時は`htmx.ajax('POST', '/tasks/<id>/move', {target:'#board', swap:'outerHTML', values:{status:..., cycle:...}})`
+  を呼ぶ（`status`・`cycle`の両方を常に送信し、`handleMoveTask`で両方を同時更新する）。
+
+## 週次繰り越し（ロールオーバー）
+
+- 週の区切りは月曜0:00（JST）始まり。「今週」（`cycle_start_date`が設定されている）に属し
+  `status != done`のタスクは、週境界を迎えると自動的に次週（新しい月曜日の日付）へ
+  `cycle_start_date`が書き換えられる（`internal/taskstore/rollover.go`の`RunRollover`）。
+  `status = done`のタスクは対象外で、`cycle_start_date`は元のまま据え置かれる。
+- 実行方式はアプリ内常駐goroutine（`StartRolloverLoop`、15分間隔のticker）。サーバー停止中に
+  週境界をまたいでいた場合に備え、起動時にも同じ処理を1回同期実行する。外部cron・外部通信は
+  使わない（比較検討の経緯は`docs/adr/complete/cycle-rollover-execution.md`参照）。
 
 ## モーダル（2種、ともに標準`<dialog>`要素、外部ライブラリ不使用）
 - 構成・項目はFlask版から変更していない（詳細表示＋編集のハイブリッドUI、新規タスクの
@@ -80,7 +118,7 @@
 | `GET /` | ボード表示。`target`・`show_untracked`をクエリパラメータで受け取る |
 | `POST /tasks/new` | 新規タスク作成（due_date任意）。target が jira_a/jira_b の場合はJIRA起票スタブのログのみ出力（実通信なし） |
 | `POST /tasks/{id}/edit` | 編集モーダルからの保存。title/target/statusを検証し更新（due_dateは未入力ならNULLとして保存）。`status`が`done`へ/から変化する際は`closed_at`をその場で設定/クリアする |
-| `POST /tasks/{id}/move` | ドラッグ&ドロップからの状態変更。JIRA連携タスクなら`stubJiraTransition()`を呼ぶ |
+| `POST /tasks/{id}/move` | ドラッグ&ドロップからの状態変更。`status`に加え`cycle`(`this_week`/`backlog`)も受け取り両方を更新する。JIRA連携タスクなら`stubJiraTransition()`を呼ぶ |
 | `POST /tasks/{id}/track` | 「非表示」/「再表示」ボタン。後述の業務ルール参照 |
 
 ## 「非表示」の業務ルール（`handleToggleTrack`）
